@@ -1,0 +1,214 @@
+﻿import threading
+import requests
+from enum import Enum
+from typing import Optional, Any
+
+from android_utils import log
+from base_plugin import BasePlugin
+from ui.bulletin import BulletinHelper
+from ui.settings import Selector
+
+from java.io import File
+
+from org.telegram.messenger import ApplicationLoader
+
+__id__ = "reswag"
+__name__ = "reSwaga"
+__description__ = "свага💤"
+__icon__ = "remusic/0"
+__version__ = "1.3.6"
+__author__ = "@reNightly, @qmrrchh"
+__min_version__ = "11.12.1"
+
+
+PLATFORM_EXTENSION = "swag_"
+
+
+def logcat(message):
+    log(f"[{__id__}] {message}")
+
+
+def _get_temp_dir() -> Optional[File]:
+    base_dir = ApplicationLoader.getFilesDirFixed()
+    File(base_dir, __name__)
+    try:
+        base_dir = ApplicationLoader.getFilesDirFixed()
+        if not base_dir:
+            return None
+        temp_dir = File(base_dir, __name__)
+        if not temp_dir.exists() and not temp_dir.mkdirs():
+            return None
+        return temp_dir
+    except Exception as e:
+        logcat(f"Error getting/creating temp directory: {e}")
+        return None
+
+
+class Track:
+    def __init__(
+            self,
+            active: bool,
+            track_id: int = None,
+            title: str = None,
+            artist: list = None,
+            album: str = None,
+            thumb: str = None,
+            duration: int = None,
+            progress: int = None,
+            link: str = None,
+            download_url: str = None,
+    ):
+        self.active = active
+        self.track_id = track_id
+        self.title = title
+        self.artist = artist
+        self.album = album
+        self.thumb = thumb
+        self.duration = duration
+        self.progress = progress
+        self.link = link
+        self.download_url = download_url
+
+
+class Platform(Enum):
+    NotSelected = 0
+    Spotify = 1
+    YandexMusic = 2
+    SoundCloud = 3
+
+    @classmethod
+    def has_value(cls, value):
+        return value in cls._value2member_map_
+
+
+class BasePlatform:
+    def __init__(self, value: str):
+        self.poller_enabled: bool = False
+        self.now_track: Optional[Track] = None
+
+        if value:
+            self.value: str = value
+        else:
+            logcat("Value is none.")
+
+    def get_track(self) -> Optional[Track]:
+        pass
+
+    def poller(self):
+        pass
+
+    def start_poller(self):
+        if not self.poller_enabled:
+            self.poller_enabled = True
+            threading.Thread(target=self.poller, daemon=True).start()
+        else:
+            logcat("Poller already started.")
+
+    def stop_poller(self):
+        if self.poller_enabled:
+            self.poller_enabled = False
+        else:
+            logcat("Poller not started for stopping.")
+
+
+def get_platform_name(platform: Platform) -> Optional[str]:
+    if platform == Platform.NotSelected:
+        return None
+    elif platform == Platform.Spotify:
+        return PLATFORM_EXTENSION + "spotify"
+    elif platform == Platform.YandexMusic:
+        return PLATFORM_EXTENSION + "ym"
+    elif platform == Platform.SoundCloud:
+        return PLATFORM_EXTENSION + "sc"
+    else:
+        return None
+
+
+def download_platform(platform: Platform):
+    name = get_platform_name(platform)
+    if name is None:
+        logcat("Platform name is none.")
+        return
+
+    name += ".py"
+
+    try:
+        logcat(f"Downloading {name}...")
+        with open(File(_get_temp_dir(), name).getAbsolutePath(), "wb") as f:
+            platform_content = requests.get(f"https://github.com/cherryymerryy/reSwaga/raw/refs/heads/main/{name}").content
+            if platform_content is not None or platform_content != "":
+                f.write(platform_content)
+            else:
+                logcat("Platform content is none.")
+    except Exception as e:
+        logcat(f"Failed to download {name} ({e})")
+
+
+class ReSwagaPlugin(BasePlugin):
+    def __init__(self):
+        super().__init__()
+        if not self.enabled: return
+        self.platform: Optional[BasePlatform] = None
+
+    def on_plugin_load(self):
+        self.add_on_send_message_hook()
+        _get_temp_dir()
+        logcat(f"plugin loaded")
+
+    def on_plugin_unload(self):
+        logcat(f"plugin unloaded")
+
+    def create_settings(self):
+        return [
+            Selector(
+                key="selected_platform",
+                text="платформа",
+                items=["Не выбрано", "Spotify", "Yandex.Music", "Soundcloud"],
+                default=0,
+                on_change=lambda new_value: self.update_platform_object(new_value)
+            )
+        ]
+
+    def on_send_message_hook(self, account: int, params: Any):
+        text = params.message
+
+        if text == ".now":
+            platform = self.get_setting("selected_platform", 0)
+            if platform == 0 or self.platform is None:
+                BulletinHelper.show_error("You can't use command without selected platform.")
+                return
+
+            track = self.platform.get_track()
+
+    def update_platform_object(self, new_platform: int):
+        if new_platform == int(Platform.NotSelected.value):
+            self.platform = None
+
+        elif new_platform == int(Platform.Spotify.value):
+            try:
+                import swag_spotify
+                self.platform = swag_spotify.Spotify
+            except ModuleNotFoundError as e:
+                download_platform(Platform.Spotify)
+                logcat(f"Failed to import Spotify. ({e})")
+
+        elif new_platform == int(Platform.YandexMusic.value):
+            try:
+                import swag_ym
+                self.platform = swag_ym.YandexMusic
+            except ModuleNotFoundError as e:
+                download_platform(Platform.YandexMusic)
+                logcat(f"Failed to import YandexMusic. ({e})")
+
+        elif new_platform == int(Platform.SoundCloud.value):
+            try:
+                import swag_sc
+                self.platform = swag_sc.SoundCloud
+            except ModuleNotFoundError as e:
+                download_platform(Platform.SoundCloud)
+                logcat(f"Failed to import SoundCloud. ({e})")
+
+        else:
+            logcat(f"Unknown platform ({new_platform})")
+
+        logcat(f"Platform object updated to {Platform[str(new_platform)].value} ({new_platform})")
