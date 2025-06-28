@@ -1,7 +1,7 @@
 ﻿from typing import Optional
 import requests
 
-from reSwaga import BasePlatform, Track, logcat
+from reswag import BasePlatform, Track, logcat
 
 
 class YandexMusic(BasePlatform):
