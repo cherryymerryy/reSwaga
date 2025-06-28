@@ -1,8 +1,10 @@
 ﻿from typing import Optional
 import requests
-import reSwaga
 
-class YandexMusic(reSwaga.BasePlatform):
+from reSwaga import BasePlatform
+
+
+class YandexMusic(BasePlatform):
     def __init__(self, value: str):
         super().__init__(value)
         self.api_url: str = "https://track.mipoh.ru/"
