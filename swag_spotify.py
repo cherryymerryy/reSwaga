@@ -27,7 +27,7 @@ class Spotify(BasePlatform):
                 album = self.get_album_link(data['track']['id'])
                 track = Track(
                     active=True,
-                    id=track_id,
+                    track_id=track_id,
                     title=data['track']['name'],
                     artist=[artist['name'] for artist in data['track']['artists']],
                     album=album,
