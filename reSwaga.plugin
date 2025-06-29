@@ -1,21 +1,24 @@
-﻿import os
+﻿import json
+import os
+import pathlib
 import threading
-from sys import path
-
 import requests
 from enum import Enum
-from typing import Optional, Any
+from typing import Optional, Any, Callable, List
 
 from android_utils import log, run_on_ui_thread
 from base_plugin import BasePlugin, HookResult, HookStrategy
 from client_utils import get_last_fragment
 from ui.alert import AlertDialogBuilder
 from ui.bulletin import BulletinHelper
-from ui.settings import Selector, Input
+from ui.settings import Selector, Input, Text, Divider, Header
 
 from java.io import File
 
-from org.telegram.messenger import ApplicationLoader
+from com.exteragram.messenger.plugins import PluginsController
+from com.exteragram.messenger.plugins.ui import PluginSettingsActivity
+
+from org.telegram.messenger import ApplicationLoader, R
 
 __id__ = "reswag"
 __name__ = "reSwaga"
@@ -25,31 +28,117 @@ __version__ = "1.0.0"
 __author__ = "@reNightly, @qmrrchh"
 __min_version__ = "11.12.1"
 
-
 PLATFORM_EXTENSION = "swag_"
+RESOURCE_DIR_NAME = "swaga_resources"
+RESOURCES = [
+    "swag-strings-ru.json",
+]
+DOWNLOAD_URL = "https://raw.githubusercontent.com/cherryymerryy/reSwaga/main/"
+
+REMOTE_CONFIG_URL = DOWNLOAD_URL + "swag-config.json"
+REMOTE_CONFIG = {}
 
 
 def logcat(message):
     log(f"[{__id__}] {message}")
 
 
-def show_error(message):
-    BulletinHelper.show_error(f"[{__name__}] {message}")
+def show_error(message: str, on_click: Optional[Callable] = None, button_text: str = ""):
+    if on_click is None:
+        BulletinHelper.show_error(f"[{__name__}] {message}")
+    elif on_click is not None and button_text != "":
+        BulletinHelper.show_with_button(f"[{__name__}] {message}", R.raw.error, button_text, lambda: on_click())
+    else:
+        BulletinHelper.show_error(f"[{__name__}] {message}")
+
+
+def show_info(message: str, on_click: Optional[Callable] = None, button_text: str = ""):
+    if on_click is None:
+        BulletinHelper.show_info(f"[{__name__}] {message}")
+    elif on_click is not None and button_text != "":
+        BulletinHelper.show_with_button(f"[{__name__}] {message}", R.raw.info, button_text, lambda: on_click())
+    else:
+        BulletinHelper.show_error(f"[{__name__}] {message}")
 
 
 def _get_temp_dir() -> Optional[File]:
     try:
-        base_dir = os.path.dirname(os.path.abspath(__file__))
+        base_dir = ApplicationLoader.getFilesDirFixed()
         if not base_dir:
             return None
-        temp_dir = File(base_dir)
-        logcat(f"dir {temp_dir.getAbsolutePath()}")
+        temp_dir = File(base_dir.getAbsolutePath(), f"plugins/{RESOURCE_DIR_NAME}")
         if not temp_dir.exists() and not temp_dir.mkdirs():
             return None
         return temp_dir
     except Exception as e:
         logcat(f"Error getting/creating temp directory: {e}")
         return None
+
+
+def read_remote_config():
+    global REMOTE_CONFIG, RESOURCES
+    try:
+        req = requests.get(REMOTE_CONFIG_URL)
+        if req.status_code == 200:
+            decoded_content = req.content.decode('utf-8-sig')
+            REMOTE_CONFIG = json.loads(decoded_content)
+            logcat(REMOTE_CONFIG)
+
+            if REMOTE_CONFIG["resources_names"]:
+                RESOURCES = REMOTE_CONFIG["resources_names"]
+                logcat(RESOURCES)
+
+            logcat("Remote config received.")
+        else:
+            logcat("Remote config not found.")
+    except Exception as e:
+        logcat(f"Failed to receive remote config: {e}")
+
+
+def download_file(url: str, file_path: str):
+    if url is None or url == "":
+        logcat("No URL provided to download.")
+        return
+
+    if file_path is None or file_path == "":
+        logcat("No file_path provided to download.")
+        return
+
+    try:
+        logcat(f"Downloading {url}...")
+
+        response = requests.get(url, timeout=15)
+        response.raise_for_status()
+        content = response.content
+
+        if content:
+            with open(file_path, "wb") as f:
+                f.write(content)
+            logcat(f"Successfully downloaded {url}.")
+        else:
+            logcat(f"Downloaded empty file for {url}.")
+
+    except requests.exceptions.HTTPError as e:
+        show_error(f"Failed to download {url}. Server returned error: {e}")
+        logcat(f"Failed to download {url}. Server returned error: {e}")
+    except requests.exceptions.RequestException as e:
+        show_error(f"Failed to download {url} due to a network error: {e}")
+        logcat(f"Failed to download {url} due to a network error: {e}")
+    except IOError as e:
+        show_error(f"Failed to save {url}. Permission or disk error: {e}")
+        logcat(f"Failed to save {url}. Permission or disk error: {e}")
+    except Exception as e:
+        show_error(f"An unexpected error occurred while downloading {url}: {e}")
+        logcat(f"An unexpected error occurred while downloading {url}: {e}")
+
+
+def _open_plugin_settings():
+    try:
+        java_plugin = PluginsController.getInstance().plugins.get(__id__)
+        if java_plugin:
+            run_on_ui_thread(lambda: get_last_fragment().presentFragment(PluginSettingsActivity(java_plugin)))
+    except Exception as e:
+        logcat(f"Error opening plugin settings: {e}")
 
 
 class Track:
@@ -64,6 +153,7 @@ class Track:
             duration: int = None,
             progress: int = None,
             link: str = None,
+            device: str = None,
             download_url: str = None,
     ):
         self.active = active
@@ -75,6 +165,7 @@ class Track:
         self.duration = duration
         self.progress = progress
         self.link = link
+        self.device = device
         self.download_url = download_url
 
 
@@ -119,6 +210,19 @@ class BasePlatform:
             logcat("Poller not started for stopping.")
 
 
+def get_platform(platform: int) -> Platform:
+    if platform == 0:
+        return Platform.NotSelected
+    elif platform == 1:
+        return Platform.Spotify
+    elif platform == 2:
+        return Platform.YandexMusic
+    elif platform == 3:
+        return Platform.SoundCloud
+    else:
+        return Platform.NotSelected
+
+
 def get_platform_name(platform: Platform) -> Optional[str]:
     if platform == Platform.NotSelected:
         return None
@@ -132,18 +236,73 @@ def get_platform_name(platform: Platform) -> Optional[str]:
         return None
 
 
+def get_platform_from_name(name: str) -> Optional[Platform]:
+    if name == f"{PLATFORM_EXTENSION}spotify.py":
+        return Platform.Spotify
+    elif name == f"{PLATFORM_EXTENSION}ym.py":
+        return Platform.YandexMusic
+    elif name == f"{PLATFORM_EXTENSION}sc.py":
+        return Platform.SoundCloud
+    else:
+        return Platform.NotSelected
+
+
+def is_platform_exists(platform: int) -> Optional[bool]:
+    temp = _get_temp_dir()
+    if temp is None:
+        logcat("Temp directory is None.")
+        return False
+
+    if platform == int(Platform.NotSelected.value):
+        return None
+    elif platform == int(Platform.Spotify.value):
+        spotify = File(temp.getAbsolutePath() + f"/{PLATFORM_EXTENSION}spotify.py")
+        return spotify.exists()
+    elif platform == int(Platform.YandexMusic.value):
+        ym = File(temp.getAbsolutePath() + f"/{PLATFORM_EXTENSION}ym.py")
+        return ym.exists()
+    elif platform == int(Platform.SoundCloud.value):
+        sc = File(temp.getAbsolutePath() + f"/{PLATFORM_EXTENSION}sc.py")
+        return sc.exists()
+    else:
+        logcat(f"Platform not found. ({platform})")
+        return None
+
+
+def get_installed_swaga_modules() -> Optional[List[str]]:
+    try:
+        temp = _get_temp_dir()
+        if temp is None:
+            logcat("Temp directory is None.")
+            return None
+
+        files = [f.getName() for f in temp.listFiles() if str(f.getName()).endswith(".py")]
+        return files
+    except Exception as e:
+        logcat(f"get_installed_swaga_modules error: {e}")
+
+
+def reload_settings():
+    PluginsController.getInstance().invalidatePluginSettings(__id__)
+    PluginsController.getInstance().loadPluginSettings(__id__)
+
+
 class ReSwagaPlugin(BasePlugin):
     def __init__(self):
         super().__init__()
         if not self.enabled: return
         self.platform: Optional[BasePlatform] = None
         self.spinner: Optional[AlertDialogBuilder] = None
+        self.info: Optional[AlertDialogBuilder] = None
+        self.loading: Optional[AlertDialogBuilder] = None
 
     def on_plugin_load(self):
         if not self.enabled: return
         self.add_on_send_message_hook()
         _get_temp_dir()
-        self.update_platform_object(self.get_setting("selected_platform", 0))
+        threading.Thread(target=read_remote_config, daemon=True).start()
+        self.update_platform_object(self.get_setting("selected_platform", 0), True)
+        threading.Thread(target=self.check_resources).start()
         logcat(f"plugin loaded")
 
     def on_plugin_unload(self):
@@ -151,73 +310,220 @@ class ReSwagaPlugin(BasePlugin):
 
     def create_settings(self):
         selected_platform = self.get_setting("selected_platform", 0)
-        return [
+
+        settings = [
+            Header("Service & Authorization"),
             Selector(
                 key="selected_platform",
                 text="платформа",
-                items=["Не выбрано", "Spotify", "Yandex.Music", "Soundcloud"],
+                items=["Не выбрано", "Spotify", "Yandex.Music", "SoundCloud"],
                 default=0,
-                on_change=lambda new_value: self.update_platform_object(new_value)
+                on_change=lambda new_value: self.update_platform_object(new_value, False)
             ),
             Input(
                 key="value",
-                text="token"
-            ) if selected_platform != int(Platform.NotSelected.value) else None,
+                text="token",
+                on_change=lambda z: self.update_platform_object(self.get_setting("selected_platform", 0), True)
+            ) if selected_platform != int(Platform.NotSelected.value) and is_platform_exists(
+                selected_platform) else None,
+
+            Divider(),
+
+            Header("Resources"),
+            Text("remove all swaga resources", on_click=lambda v: self.delete_all_swaga_resources()),
         ]
+
+        try:
+            installed = get_installed_swaga_modules()
+            if installed and len(installed) > 0:
+                settings += [Divider()]
+                for i in installed:
+                    settings += [
+                        Text(
+                            text="Remove " + str(get_platform_from_name(i)).replace("Platform.", ""),
+                            on_click=lambda v: self.delete_swaga_module(i)
+                        )
+                    ]
+        except Exception as e:
+            logcat(f"create_settings error: {e}")
+
+        return settings
 
     def on_send_message_hook(self, account: int, params: Any):
         text = params.message
 
         if text == ".now":
             platform = self.get_setting("selected_platform", 0)
+
+            if not is_platform_exists(platform):
+                show_error(
+                    "Platform not found. Click for download",
+                    lambda: threading.Thread(target=self.download_platform, args=(get_platform(platform),)).start(),
+                    "download"
+                )
+                return HookResult(strategy=HookStrategy.CANCEL)
+
             if platform == 0 or self.platform is None:
                 BulletinHelper.show_error("You can't use command without selected platform.")
                 return HookResult(strategy=HookStrategy.CANCEL)
 
-            track = self.platform.get_track()
-            if track is None:
-                BulletinHelper.show_error("track not found")
-                return HookResult(strategy=HookStrategy.CANCEL)
-
-            params.message = f"{track.artist}: {track.title}"
-            return HookResult(strategy=HookStrategy.MODIFY, params=params)
+            threading.Thread(target=self.debug_show_track, daemon=True).start()
+            return HookResult(strategy=HookStrategy.CANCEL)
         else:
             return HookResult(strategy=HookStrategy.DEFAULT)
 
-    def update_platform_object(self, new_platform: int):
+    def delete_all_swaga_resources(self):
+        temp = _get_temp_dir()
+        if temp is None:
+            logcat("Temp directory is None.")
+            return
+
+        try:
+            for f in temp.listFiles():
+                logcat(f"Deleting {f.getName()}")
+                if str(f.getName()).startswith("swag"):
+                    if f.delete():
+                        logcat(f"Removed file {f.getName()}")
+        except Exception as e:
+            logcat(f"delete_all_swaga_resources error: {e}")
+
+        self.set_setting("selected_platform", 0)
+        reload_settings()
+        logcat("Plugin removed all swaga resources.")
+
+    def delete_module(self, platform: int) -> Optional[bool]:
+        logcat("Staring deleting module...")
+        temp = _get_temp_dir()
+        if temp is None:
+            logcat("Temp directory is None.")
+            return False
+
+        try:
+            platform = get_platform(platform)
+            platform_name = get_platform_name(platform)
+            file = File(temp.getAbsolutePath(), platform_name + ".py")
+            if file.exists():
+                if file.delete():
+                    show_info("Модуль удален")
+
+                    current_platform = self.get_setting("selected_platform", 0)
+                    if current_platform == platform:
+                        self.set_setting("selected_platform", 0)
+
+                    reload_settings()
+                    return True
+                else:
+                    reload_settings()
+                    return False
+        except Exception as e:
+            logcat(f"delete_module error: {e}")
+
+    def delete_swaga_module(self, module_name: str) -> Optional[bool]:
+        platform = get_platform_from_name(module_name)
+        self.show_info_alert(
+            "Are you sure?",
+            f"Вы ряльна хотите удалить {platform.value}",
+            "дооо",
+            lambda: self.delete_module(int(str(platform.value))),
+            "нииии"
+        )
+
+    def debug_show_track(self):
+        run_on_ui_thread(lambda: self.show_spinner())
+
+        try:
+            track = self.platform.get_track()
+            if track is None:
+                show_error("track not found")
+                return
+
+            if not track.active:
+                show_error("track not active")
+                return
+
+            platform_name = get_platform_name(get_platform(self.get_setting("selected_platform", 0)))
+            show_info(f"{track.title} | {track.artist} ({platform_name}) ")
+        except Exception as e:
+            logcat(f"debug_show_track error: {e}")
+
+        run_on_ui_thread(lambda: self.dismiss_spinner())
+
+    def update_platform_object(self, new_platform: int, value: bool):
+        if not value:
+            self.set_setting("value", "")
+
         if new_platform == int(Platform.NotSelected.value):
             self.platform = None
 
         elif new_platform == int(Platform.Spotify.value):
             try:
-                from swag_spotify import Spotify
-                self.platform = Spotify()
+                if not is_platform_exists(new_platform):
+
+                from swaga_resources.swag_spotify import Spotify
+                token = self.get_setting("value", None)
+                self.platform = Spotify(token)
             except ModuleNotFoundError as e:
-                threading.Thread(target=self.download_platform, args=(Platform.Spotify,)).start()
+                run_on_ui_thread(lambda:
+                                 self.show_info_alert(
+                                     f"Missing Spotify package.",
+                                     "For use this platform you need download his package.",
+                                     positive_text="Download",
+                                     positive_listener=lambda: threading.Thread(target=self.download_platform,
+                                                                                args=(Platform.Spotify,),
+                                                                                daemon=True).start(),
+                                     neutral_text="No"
+                                 )
+                                 )
+                logcat(f"Failed to import Spotify. ({e})")
+            except Exception as e:
                 logcat(f"Failed to import Spotify. ({e})")
 
         elif new_platform == int(Platform.YandexMusic.value):
             try:
-                from swag_ym import YandexMusic
-                token = self.get_setting("value", "none")
+                from swaga_resources.swag_ym import YandexMusic
+                token = self.get_setting("value", None)
                 self.platform = YandexMusic(token)
             except ModuleNotFoundError as e:
-                threading.Thread(target=self.download_platform, args=(Platform.YandexMusic,)).start()
+                run_on_ui_thread(lambda:
+                                 self.show_info_alert(
+                                     f"Missing Yandex.Music package.",
+                                     "For use this platform you need download his package.",
+                                     positive_text="Download",
+                                     positive_listener=lambda: threading.Thread(target=self.download_platform,
+                                                                                args=(Platform.YandexMusic,),
+                                                                                daemon=True).start(),
+                                     neutral_text="No"
+                                 )
+                                 )
                 logcat(f"Failed to import YandexMusic. ({e})")
+            except Exception as e:
+                logcat(f"Failed to import Yandex.Music. ({e})")
 
         elif new_platform == int(Platform.SoundCloud.value):
             try:
-                from swag_sc import SoundCloud
+                from swaga_resources.swag_sc import SoundCloud
                 self.platform = SoundCloud()
             except ModuleNotFoundError as e:
-                threading.Thread(target=self.download_platform, args=(Platform.SoundCloud,)).start()
+                run_on_ui_thread(lambda:
+                                 self.show_info_alert(
+                                     f"Missing SoundCloud package.",
+                                     "For use this platform you need download his package.",
+                                     positive_text="Download",
+                                     positive_listener=lambda: threading.Thread(target=self.download_platform,
+                                                                                args=(Platform.SoundCloud,),
+                                                                                daemon=True).start(),
+                                     neutral_text="No"
+                                 )
+                                 )
+                logcat(f"Failed to import SoundCloud. ({e})")
+            except Exception as e:
                 logcat(f"Failed to import SoundCloud. ({e})")
 
         else:
             logcat(f"Unknown platform ({new_platform})")
 
     def download_platform(self, platform: Platform):
-        run_on_ui_thread(lambda : self.show_spinner())
+        run_on_ui_thread(lambda: self.show_spinner())
         name = get_platform_name(platform)
         if name is None:
             logcat("Platform name is none.")
@@ -227,48 +533,65 @@ class ReSwagaPlugin(BasePlugin):
 
         name += ".py"
         temp = _get_temp_dir()
-        if temp is None:
-            logcat("Platform temp dir is none.")
-            show_error("Temp directory not found.")
-            run_on_ui_thread(lambda: self.dismiss_spinner())
+        if not temp:
+            logcat("Temp directory is none.")
             return
 
         file_path = os.path.join(temp.getAbsolutePath(), name)
         logcat(file_path)
-        url = f"https://raw.githubusercontent.com/cherryymerryy/reSwaga/main/{name}"
+        url = DOWNLOAD_URL + name
 
-        try:
-            logcat(f"Downloading {name}...")
-            response = requests.get(url, timeout=15)
-            response.raise_for_status()
-            content = response.content
-
-            if content:
-                with open(file_path, "wb") as f:
-                    f.write(content)
-                logcat(f"Successfully downloaded {name}.")
-            else:
-                logcat(f"Downloaded empty file for {name}.")
-
-        except requests.exceptions.HTTPError as e:
-            show_error(f"Failed to download {name}. Server returned error: {e}")
-            logcat(f"Failed to download {name}. Server returned error: {e}")
-        except requests.exceptions.RequestException as e:
-            show_error(f"Failed to download {name} due to a network error: {e}")
-            logcat(f"Failed to download {name} due to a network error: {e}")
-        except IOError as e:
-            show_error(f"Failed to save {name}. Permission or disk error: {e}")
-            logcat(f"Failed to save {name}. Permission or disk error: {e}")
-        except Exception as e:
-            show_error(f"An unexpected error occurred while downloading {name}: {e}")
-            logcat(f"An unexpected error occurred while downloading {name}: {e}")
+        download_file(url, file_path)
+        file = File(file_path)
+        if file.exists():
+            reload_settings()
 
         run_on_ui_thread(lambda: self.dismiss_spinner())
+
+    def check_resources(self):
+        temp = _get_temp_dir()
+        if not temp:
+            logcat("Temp directory is none.")
+            return
+
+        if pathlib.Path(temp.getAbsolutePath()).exists():
+            return
+        else:
+            self.download_resources()
+            return
+
+    def download_resources(self):
+        run_on_ui_thread(lambda: self.show_loading_alert("Downloading resources..."))
+
+        temp = _get_temp_dir()
+        if not temp:
+            logcat("Temp directory is none.")
+            return
+
+        progress: int = 0
+
+        for r in RESOURCES:
+            try:
+                progress += 1
+                run_on_ui_thread(lambda: self.update_loading_progress(progress))
+
+                file_path = os.path.join(temp.getAbsolutePath(), r)
+                url = DOWNLOAD_URL + f"resources/" + r
+
+                download_file(url, file_path)
+
+            except Exception as e:
+                show_error(f"An unexpected error occurred while downloading {r}: {e}")
+                logcat(f"An unexpected error occurred while downloading {r}: {e}")
+
+        run_on_ui_thread(lambda: self.dismiss_loading_alert())
 
     def show_spinner(self):
         fragment = get_last_fragment()
         ctx = fragment.getParentActivity() if fragment else ApplicationLoader.applicationContext
-        if ctx is None: return
+        if ctx is None:
+            logcat("Context not found, can't show spinner.")
+            return
 
         self.spinner = AlertDialogBuilder(ctx, AlertDialogBuilder.ALERT_TYPE_SPINNER)
         self.spinner.set_cancelable(False)
@@ -277,8 +600,84 @@ class ReSwagaPlugin(BasePlugin):
         self.spinner.create()
         self.spinner.show()
 
+        if self.spinner.get_dialog() and self.spinner.get_dialog().isShowing():
+            java = self.spinner.get_dialog()
+            java.setCancelable(False)
+            java.setCanceledOnTouchOutside(False)
+
     def dismiss_spinner(self):
         if self.spinner and self.spinner.get_dialog() and self.spinner.get_dialog().isShowing():
             self.spinner.dismiss()
 
         self.spinner = None
+
+    def show_info_alert(self, title: str, message: str, positive_text: Optional[str] = None,
+                        positive_listener: Optional[Callable] = None, neutral_text: Optional[str] = "Ok",
+                        neutral_listener: Optional[Callable] = None):
+        fragment = get_last_fragment()
+        ctx = fragment.getParentActivity() if fragment else ApplicationLoader.applicationContext
+        if ctx is None:
+            logcat("Context not found, can't show info alert.")
+            return
+
+        self.info = AlertDialogBuilder(ctx, AlertDialogBuilder.ALERT_TYPE_MESSAGE)
+        self.info.set_title(title)
+        self.info.set_message(message)
+
+        if positive_text:
+            if positive_listener:
+                self.info.set_positive_button(positive_text, lambda alert, i: positive_listener())
+            else:
+                self.info.set_positive_button(positive_text, lambda alert, i: self.dismiss_info_alert())
+
+        if neutral_text:
+            if neutral_listener:
+                self.info.set_neutral_button(neutral_text, lambda alert, i: neutral_listener())
+            else:
+                self.info.set_neutral_button(neutral_text, lambda alert, i: self.dismiss_info_alert())
+
+        self.info.show()
+
+    def dismiss_info_alert(self):
+        if self.info and self.info.get_dialog() and self.info.get_dialog().isShowing():
+            self.info.dismiss()
+
+        self.info = None
+
+    def show_loading_alert(self, title: str):
+        if title is None:
+            logcat("Title is empty, can't show loading.")
+            return
+
+        fragment = get_last_fragment()
+        ctx = fragment.getParentActivity() if fragment else ApplicationLoader.applicationContext
+        if ctx is None:
+            logcat("Context not found, can't show loading alert.")
+            return
+
+        self.loading = AlertDialogBuilder(ctx, AlertDialogBuilder.ALERT_TYPE_LOADING)
+        self.loading.set_title(title)
+        self.loading.set_cancelable(False)
+        self.loading.set_canceled_on_touch_outside(False)
+        self.loading.set_on_cancel_listener(None)
+        self.loading.show()
+
+        if self.loading.get_dialog() and self.loading.get_dialog().isShowing():
+            java = self.loading.get_dialog()
+            java.setCancelable(False)
+            java.setCanceledOnTouchOutside(False)
+
+        self.loading.set_progress(0)
+
+    def update_loading_progress(self, progress: int):
+        if self.loading is None or not self.loading.get_dialog().isShowing():
+            logcat("Can't update loading alert, because he is None or not showing.")
+            return
+
+        self.loading.set_progress(progress)
+
+    def dismiss_loading_alert(self):
+        if self.loading and self.loading.get_dialog() and self.loading.get_dialog().isShowing():
+            self.loading.dismiss()
+
+        self.loading = None
