@@ -6,7 +6,12 @@ from reswag import BasePlatform, Track, logcat
 class Spotify(BasePlatform):
     def __init__(self, value: str):
         super().__init__(value)
-        self.username = value.strip()
+        username = value.strip() if value else ""
+        if '/' in username:
+            username = username.split('/')[-1]
+        self.username = username
+        self.headers = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
+        self.now_track = Track(active=False)
 
     def get_track(self) -> Optional[Track]:
         data = requests.get(f"https://api.stats.fm/api/v1/users/{self.username}/streams/current", headers=self.headers)
