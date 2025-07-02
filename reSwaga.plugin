@@ -29,14 +29,14 @@ __version__ = "1.0.0"
 __author__ = "@reNightly, @qmrrchh"
 __min_version__ = "11.12.1"
 
-PLATFORM_EXTENSION = "swag_"
-RESOURCE_DIR_NAME = "swaga_resources"
+RESOURCE_DIR_NAME = "resources"
 RESOURCES = [
-    "swag-strings-ru.json",
+    "strings-ru.json",
+    "strings-en.json",
 ]
 DOWNLOAD_URL = "https://raw.githubusercontent.com/cherryymerryy/reSwaga/main/"
 
-REMOTE_CONFIG_URL = DOWNLOAD_URL + "swag-config.json"
+REMOTE_CONFIG_URL = DOWNLOAD_URL + "config.json"
 REMOTE_CONFIG = {}
 
 
@@ -105,8 +105,11 @@ def download_file(url: str, file_path: str):
         logcat("No file_path provided to download.")
         return
 
+    args = url.split("/")
+    name = args.pop()
+
     try:
-        logcat(f"Downloading {url}...")
+        logcat(f"Downloading {name}...")
 
         response = requests.get(url, timeout=15)
         response.raise_for_status()
@@ -115,22 +118,22 @@ def download_file(url: str, file_path: str):
         if content:
             with open(file_path, "wb") as f:
                 f.write(content)
-            logcat(f"Successfully downloaded {url}.")
+            logcat(f"Successfully downloaded {name}.")
         else:
-            logcat(f"Downloaded empty file for {url}.")
+            logcat(f"Downloaded empty file for {name}.")
 
     except requests.exceptions.HTTPError as e:
-        show_error(f"Failed to download {url}. Server returned error: {e}")
-        logcat(f"Failed to download {url}. Server returned error: {e}")
+        show_error(f"Failed to download {name}. Server returned error: {e}")
+        logcat(f"Failed to download {name}. Server returned error: {e}")
     except requests.exceptions.RequestException as e:
-        show_error(f"Failed to download {url} due to a network error: {e}")
-        logcat(f"Failed to download {url} due to a network error: {e}")
+        show_error(f"Failed to download {name} due to a network error: {e}")
+        logcat(f"Failed to download {name} due to a network error: {e}")
     except IOError as e:
-        show_error(f"Failed to save {url}. Permission or disk error: {e}")
-        logcat(f"Failed to save {url}. Permission or disk error: {e}")
+        show_error(f"Failed to save {name}. Permission or disk error: {e}")
+        logcat(f"Failed to save {name}. Permission or disk error: {e}")
     except Exception as e:
-        show_error(f"An unexpected error occurred while downloading {url}: {e}")
-        logcat(f"An unexpected error occurred while downloading {url}: {e}")
+        show_error(f"An unexpected error occurred while downloading {name}: {e}")
+        logcat(f"An unexpected error occurred while downloading {name}: {e}")
 
 
 def _open_plugin_settings():
@@ -140,16 +143,6 @@ def _open_plugin_settings():
             run_on_ui_thread(lambda: get_last_fragment().presentFragment(PluginSettingsActivity(java_plugin)))
     except Exception as e:
         logcat(f"Error opening plugin settings: {e}")
-
-
-def get_list(java_list_value):
-    java_values = java_list_value
-    java_list = ArrayList(java_values)
-    py_list = list(java_list.toArray())
-    if py_list:
-        return py_list
-    else:
-        return []
 
 
 class Track:
@@ -474,8 +467,7 @@ class ReSwagaPlugin(BasePlugin):
                         continue
                     else:
                         logcat(f"{r} not found...")
-                        download_file(DOWNLOAD_URL + RESOURCE_DIR_NAME + "/" + r,
-                                      temp.getAbsolutePath() + RESOURCE_DIR_NAME + "/" + r)
+                        download_file(DOWNLOAD_URL + RESOURCE_DIR_NAME + "/" + r, temp.getAbsolutePath() + "/" + r)
                         continue
             else:
                 self.download_resources()
