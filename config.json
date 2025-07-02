@@ -1,5 +1,6 @@
 ﻿{
   "resources_names": [
-    "swag-strings-ru.json"
+    "strings-ru.json",
+    "strings-en.json"
   ]
 }
