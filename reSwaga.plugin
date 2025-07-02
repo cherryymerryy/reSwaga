@@ -4,16 +4,17 @@ import pathlib
 import threading
 import requests
 from enum import Enum
-from typing import Optional, Any, Callable, List
+from typing import Optional, Any, Callable
 
 from android_utils import log, run_on_ui_thread
 from base_plugin import BasePlugin, HookResult, HookStrategy
 from client_utils import get_last_fragment
 from ui.alert import AlertDialogBuilder
 from ui.bulletin import BulletinHelper
-from ui.settings import Selector, Input, Text, Divider, Header
+from ui.settings import Selector, Input, Divider, Header
 
 from java.io import File
+from java.util import ArrayList
 
 from com.exteragram.messenger.plugins import PluginsController
 from com.exteragram.messenger.plugins.ui import PluginSettingsActivity
@@ -141,6 +142,16 @@ def _open_plugin_settings():
         logcat(f"Error opening plugin settings: {e}")
 
 
+def get_list(java_list_value):
+    java_values = java_list_value
+    java_list = ArrayList(java_values)
+    py_list = list(java_list.toArray())
+    if py_list:
+        return py_list
+    else:
+        return []
+
+
 class Track:
     def __init__(
             self,
@@ -210,6 +221,127 @@ class BasePlatform:
             logcat("Poller not started for stopping.")
 
 
+class Spotify(BasePlatform):
+    def __init__(self, value: str):
+        super().__init__(value)
+        username = value.strip() if value else ""
+        if '/' in username:
+            username = username.split('/')[-1]
+        self.username = username
+        self.headers = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
+        self.now_track = Track(active=False)
+
+    def get_track(self) -> Optional[Track]:
+        data = requests.get(f"https://api.stats.fm/api/v1/users/{self.username}/streams/current", headers=self.headers)
+        if data.status_code == 204:
+            return Track(active=False)
+        elif data.status_code != 200:
+            return Track(active=False)
+        else:
+            data = data.json()['item']
+            if data:
+                track_id = data['track']['externalIds']['spotify']
+                track_id = track_id[0] if track_id else 0
+                album = self.get_album_link(data['track']['id'])
+                track = Track(
+                    active=True,
+                    track_id=track_id,
+                    title=data['track']['name'],
+                    artist=[artist['name'] for artist in data['track']['artists']],
+                    album=album,
+                    thumb=data['track']['albums'][0]['image'],
+                    duration=data['track']['durationMs'] // 1000,
+                    progress=data['progressMs'] // 1000,
+                    link=f"https://open.spotify.com/track/{track_id}",
+                    device=data['deviceName']
+                )
+            else:
+                track = Track(active=False)
+
+            return track
+
+    def get_album_link(self, internal_track_id) -> Optional[str]:
+        data = requests.get(f"https://api.stats.fm/api/v1/tracks/{internal_track_id}/albums", headers=self.headers)
+        if data.status_code != 200:
+            return None
+        else:
+            data = data.json()['items']
+            if data:
+                try:
+                    album_id = data[0]['externalIds']['spotify'][0]
+                    return f"https://open.spotify.com/album/{album_id}"
+                except:
+                    return None
+            else:
+                return None
+
+
+class YandexMusic(BasePlatform):
+    def __init__(self, value: str):
+        super().__init__(value)
+        self.api_url: str = "https://track.mipoh.ru/"
+        self.token = value.strip()
+        self.headers = {"User-Agent": "Mozilla/5.0", "Accept": "application/json", "ya-token": self.token}
+
+    def get_track(self) -> Optional[Track]:
+        if not self.token:
+            return Track(active=False)
+        try:
+            r = requests.get(f"{self.api_url}/get_current_track_beta", headers=self.headers, timeout=10, verify=False)
+            logcat(f"[YandexMusic] get_current_track status={r.status_code}, body={r.text[:200]}")
+            data = r.json()
+            logcat(f"[YandexMusic] get_current_track data keys={list(data.keys())}")
+            if r.status_code != 200 or 'track' not in data:
+                logcat("[YandexMusic] no 'track' key or bad status")
+                return Track(active=False)
+            t = data['track']
+            logcat(f"[YandexMusic] raw track: {t}")
+            tid = t.get('track_id')
+            raw_artist = t.get('artist', '')
+            if isinstance(raw_artist, str):
+                artists = [x.strip() for x in raw_artist.split(',') if x.strip()]
+            elif isinstance(raw_artist, list):
+                artists = raw_artist
+            else:
+                artists = []
+            album = t.get('album')
+            thumb = t.get('img')
+            duration = int(t.get('duration', 0))
+            progress_ms_raw = data.get('progress_ms', 0)
+            try:
+                progress_ms = int(progress_ms_raw)
+            except:
+                progress_ms = 0
+            progress = progress_ms // 1000
+            track = Track(
+                active=True,
+                track_id=tid,
+                title=t.get('title'),
+                artist=artists,
+                album=album,
+                thumb=thumb,
+                duration=duration,
+                progress=progress,
+                link=f"https://music.yandex.ru/track/{tid}",
+                download_url=t.get('download_link')
+            )
+            logcat(f"[YandexMusic] built track: {track.title} — {track.artist}, album={track.album}, duration={track.duration}, progress={track.progress}")
+            return track
+        except Exception as e:
+            logcat(f"[YandexMusic] get_current_track exception: {e}")
+            return Track(active=False)
+
+
+class SoundCloud(BasePlatform):
+    def __init__(self, value: str):
+        super().__init__(value)
+        self.api_url: str = "https://track.mipoh.ru/"
+        self.token = value.strip()
+
+    def get_track(self) -> Optional[Track]:
+        return Track(active=False)
+
+
 def get_platform(platform: int) -> Platform:
     if platform == 0:
         return Platform.NotSelected
@@ -221,70 +353,6 @@ def get_platform(platform: int) -> Platform:
         return Platform.SoundCloud
     else:
         return Platform.NotSelected
-
-
-def get_platform_name(platform: Platform) -> Optional[str]:
-    if platform == Platform.NotSelected:
-        return None
-    elif platform == Platform.Spotify:
-        return PLATFORM_EXTENSION + "spotify"
-    elif platform == Platform.YandexMusic:
-        return PLATFORM_EXTENSION + "ym"
-    elif platform == Platform.SoundCloud:
-        return PLATFORM_EXTENSION + "sc"
-    else:
-        return None
-
-
-def get_platform_from_name(name: str) -> Optional[Platform]:
-    if name == f"{PLATFORM_EXTENSION}spotify.py":
-        return Platform.Spotify
-    elif name == f"{PLATFORM_EXTENSION}ym.py":
-        return Platform.YandexMusic
-    elif name == f"{PLATFORM_EXTENSION}sc.py":
-        return Platform.SoundCloud
-    else:
-        return Platform.NotSelected
-
-
-def is_platform_exists(platform: int) -> Optional[bool]:
-    temp = _get_temp_dir()
-    if temp is None:
-        logcat("Temp directory is None.")
-        return False
-
-    if platform == int(Platform.NotSelected.value):
-        return None
-    elif platform == int(Platform.Spotify.value):
-        spotify = File(temp.getAbsolutePath() + f"/{PLATFORM_EXTENSION}spotify.py")
-        return spotify.exists()
-    elif platform == int(Platform.YandexMusic.value):
-        ym = File(temp.getAbsolutePath() + f"/{PLATFORM_EXTENSION}ym.py")
-        return ym.exists()
-    elif platform == int(Platform.SoundCloud.value):
-        sc = File(temp.getAbsolutePath() + f"/{PLATFORM_EXTENSION}sc.py")
-        return sc.exists()
-    else:
-        logcat(f"Platform not found. ({platform})")
-        return None
-
-
-def get_installed_swaga_modules() -> Optional[List[str]]:
-    try:
-        temp = _get_temp_dir()
-        if temp is None:
-            logcat("Temp directory is None.")
-            return None
-
-        files = [f.getName() for f in temp.listFiles() if str(f.getName()).endswith(".py")]
-        return files
-    except Exception as e:
-        logcat(f"get_installed_swaga_modules error: {e}")
-
-
-def reload_settings():
-    PluginsController.getInstance().invalidatePluginSettings(__id__)
-    PluginsController.getInstance().loadPluginSettings(__id__)
 
 
 class ReSwagaPlugin(BasePlugin):
@@ -324,28 +392,12 @@ class ReSwagaPlugin(BasePlugin):
                 key="value",
                 text="token",
                 on_change=lambda z: self.update_platform_object(self.get_setting("selected_platform", 0), True)
-            ) if selected_platform != int(Platform.NotSelected.value) and is_platform_exists(
-                selected_platform) else None,
+            ) if selected_platform != int(Platform.NotSelected.value) else None,
 
             Divider(),
 
             Header("Resources"),
-            Text("remove all swaga resources", on_click=lambda v: self.delete_all_swaga_resources()),
         ]
-
-        try:
-            installed = get_installed_swaga_modules()
-            if installed and len(installed) > 0:
-                settings += [Divider()]
-                for i in installed:
-                    settings += [
-                        Text(
-                            text="Remove " + str(get_platform_from_name(i)).replace("Platform.", ""),
-                            on_click=lambda v: self.delete_swaga_module(i)
-                        )
-                    ]
-        except Exception as e:
-            logcat(f"create_settings error: {e}")
 
         return settings
 
@@ -355,14 +407,6 @@ class ReSwagaPlugin(BasePlugin):
         if text == ".now":
             platform = self.get_setting("selected_platform", 0)
 
-            if not is_platform_exists(platform):
-                show_error(
-                    "Platform not found. Click for download",
-                    lambda: threading.Thread(target=self.download_platform, args=(get_platform(platform),)).start(),
-                    "download"
-                )
-                return HookResult(strategy=HookStrategy.CANCEL)
-
             if platform == 0 or self.platform is None:
                 BulletinHelper.show_error("You can't use command without selected platform.")
                 return HookResult(strategy=HookStrategy.CANCEL)
@@ -371,62 +415,6 @@ class ReSwagaPlugin(BasePlugin):
             return HookResult(strategy=HookStrategy.CANCEL)
         else:
             return HookResult(strategy=HookStrategy.DEFAULT)
-
-    def delete_all_swaga_resources(self):
-        temp = _get_temp_dir()
-        if temp is None:
-            logcat("Temp directory is None.")
-            return
-
-        try:
-            for f in temp.listFiles():
-                logcat(f"Deleting {f.getName()}")
-                if str(f.getName()).startswith("swag"):
-                    if f.delete():
-                        logcat(f"Removed file {f.getName()}")
-        except Exception as e:
-            logcat(f"delete_all_swaga_resources error: {e}")
-
-        self.set_setting("selected_platform", 0)
-        reload_settings()
-        logcat("Plugin removed all swaga resources.")
-
-    def delete_module(self, platform: int) -> Optional[bool]:
-        logcat("Staring deleting module...")
-        temp = _get_temp_dir()
-        if temp is None:
-            logcat("Temp directory is None.")
-            return False
-
-        try:
-            platform = get_platform(platform)
-            platform_name = get_platform_name(platform)
-            file = File(temp.getAbsolutePath(), platform_name + ".py")
-            if file.exists():
-                if file.delete():
-                    show_info("Модуль удален")
-
-                    current_platform = self.get_setting("selected_platform", 0)
-                    if current_platform == platform:
-                        self.set_setting("selected_platform", 0)
-
-                    reload_settings()
-                    return True
-                else:
-                    reload_settings()
-                    return False
-        except Exception as e:
-            logcat(f"delete_module error: {e}")
-
-    def delete_swaga_module(self, module_name: str) -> Optional[bool]:
-        platform = get_platform_from_name(module_name)
-        self.show_info_alert(
-            "Are you sure?",
-            f"Вы ряльна хотите удалить {platform.value}",
-            "дооо",
-            lambda: self.delete_module(int(str(platform.value))),
-            "нииии"
-        )
 
     def debug_show_track(self):
         run_on_ui_thread(lambda: self.show_spinner())
@@ -441,8 +429,7 @@ class ReSwagaPlugin(BasePlugin):
                 show_error("track not active")
                 return
 
-            platform_name = get_platform_name(get_platform(self.get_setting("selected_platform", 0)))
-            show_info(f"{track.title} | {track.artist} ({platform_name}) ")
+            show_info(f"{track.title} | {track.artist}")
         except Exception as e:
             logcat(f"debug_show_track error: {e}")
 
@@ -452,113 +439,49 @@ class ReSwagaPlugin(BasePlugin):
         if not value:
             self.set_setting("value", "")
 
+        token = self.get_setting("value", None)
+
         if new_platform == int(Platform.NotSelected.value):
             self.platform = None
 
         elif new_platform == int(Platform.Spotify.value):
-            try:
-                if not is_platform_exists(new_platform):
-
-                from swaga_resources.swag_spotify import Spotify
-                token = self.get_setting("value", None)
-                self.platform = Spotify(token)
-            except ModuleNotFoundError as e:
-                run_on_ui_thread(lambda:
-                                 self.show_info_alert(
-                                     f"Missing Spotify package.",
-                                     "For use this platform you need download his package.",
-                                     positive_text="Download",
-                                     positive_listener=lambda: threading.Thread(target=self.download_platform,
-                                                                                args=(Platform.Spotify,),
-                                                                                daemon=True).start(),
-                                     neutral_text="No"
-                                 )
-                                 )
-                logcat(f"Failed to import Spotify. ({e})")
-            except Exception as e:
-                logcat(f"Failed to import Spotify. ({e})")
+            self.platform = Spotify(token)
 
         elif new_platform == int(Platform.YandexMusic.value):
-            try:
-                from swaga_resources.swag_ym import YandexMusic
-                token = self.get_setting("value", None)
-                self.platform = YandexMusic(token)
-            except ModuleNotFoundError as e:
-                run_on_ui_thread(lambda:
-                                 self.show_info_alert(
-                                     f"Missing Yandex.Music package.",
-                                     "For use this platform you need download his package.",
-                                     positive_text="Download",
-                                     positive_listener=lambda: threading.Thread(target=self.download_platform,
-                                                                                args=(Platform.YandexMusic,),
-                                                                                daemon=True).start(),
-                                     neutral_text="No"
-                                 )
-                                 )
-                logcat(f"Failed to import YandexMusic. ({e})")
-            except Exception as e:
-                logcat(f"Failed to import Yandex.Music. ({e})")
+            self.platform = YandexMusic(token)
 
         elif new_platform == int(Platform.SoundCloud.value):
-            try:
-                from swaga_resources.swag_sc import SoundCloud
-                self.platform = SoundCloud()
-            except ModuleNotFoundError as e:
-                run_on_ui_thread(lambda:
-                                 self.show_info_alert(
-                                     f"Missing SoundCloud package.",
-                                     "For use this platform you need download his package.",
-                                     positive_text="Download",
-                                     positive_listener=lambda: threading.Thread(target=self.download_platform,
-                                                                                args=(Platform.SoundCloud,),
-                                                                                daemon=True).start(),
-                                     neutral_text="No"
-                                 )
-                                 )
-                logcat(f"Failed to import SoundCloud. ({e})")
-            except Exception as e:
-                logcat(f"Failed to import SoundCloud. ({e})")
+            self.platform = SoundCloud(token)
 
         else:
             logcat(f"Unknown platform ({new_platform})")
 
-    def download_platform(self, platform: Platform):
-        run_on_ui_thread(lambda: self.show_spinner())
-        name = get_platform_name(platform)
-        if name is None:
-            logcat("Platform name is none.")
-            show_error("Platform name not found.")
-            run_on_ui_thread(lambda: self.dismiss_spinner())
-            return
-
-        name += ".py"
-        temp = _get_temp_dir()
-        if not temp:
-            logcat("Temp directory is none.")
-            return
-
-        file_path = os.path.join(temp.getAbsolutePath(), name)
-        logcat(file_path)
-        url = DOWNLOAD_URL + name
-
-        download_file(url, file_path)
-        file = File(file_path)
-        if file.exists():
-            reload_settings()
-
-        run_on_ui_thread(lambda: self.dismiss_spinner())
-
     def check_resources(self):
-        temp = _get_temp_dir()
-        if not temp:
-            logcat("Temp directory is none.")
-            return
+        try:
+            temp = _get_temp_dir()
+            if not temp:
+                logcat("Temp directory is none.")
+                return
 
-        if pathlib.Path(temp.getAbsolutePath()).exists():
-            return
-        else:
-            self.download_resources()
-            return
+            if pathlib.Path(temp.getAbsolutePath()).exists():
+                files = list(temp.listFiles())
+                files_names = [n.getName() for n in files]
+                logcat("Files names: " + ', '.join(files_names))
+                for r in RESOURCES:
+                    logcat(f"Checking {r}...")
+                    if any(fn == r for fn in files_names):
+                        logcat(f"OK {r}...")
+                        continue
+                    else:
+                        logcat(f"{r} not found...")
+                        download_file(DOWNLOAD_URL + RESOURCE_DIR_NAME + "/" + r,
+                                      temp.getAbsolutePath() + RESOURCE_DIR_NAME + "/" + r)
+                        continue
+            else:
+                self.download_resources()
+                return
+        except Exception as e:
+            logcat(f"check_resources error: {e}")
 
     def download_resources(self):
         run_on_ui_thread(lambda: self.show_loading_alert("Downloading resources..."))
