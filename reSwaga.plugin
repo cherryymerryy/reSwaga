@@ -105,8 +105,7 @@ def download_file(url: str, file_path: str):
         logcat("No file_path provided to download.")
         return
 
-    args = url.split("/")
-    name = args.pop()
+    name = url.split("/").pop()
 
     try:
         logcat(f"Downloading {name}...")
@@ -178,10 +177,6 @@ class Platform(Enum):
     Spotify = 1
     YandexMusic = 2
     SoundCloud = 3
-
-    @classmethod
-    def has_value(cls, value):
-        return value in cls._value2member_map_
 
 
 class BasePlatform:
@@ -456,22 +451,18 @@ class ReSwagaPlugin(BasePlugin):
                 logcat("Temp directory is none.")
                 return
 
-            if pathlib.Path(temp.getAbsolutePath()).exists():
-                files = list(temp.listFiles())
-                files_names = [n.getName() for n in files]
-                logcat("Files names: " + ', '.join(files_names))
-                for r in RESOURCES:
-                    logcat(f"Checking {r}...")
-                    if any(fn == r for fn in files_names):
-                        logcat(f"OK {r}...")
-                        continue
+            files = list(temp.listFiles())
+
+            if len(files) != len(RESOURCES):
+                for f in files:
+                    if f.delete():
+                        logcat(f"Deleted {f.getName()}.")
                     else:
-                        logcat(f"{r} not found...")
-                        download_file(DOWNLOAD_URL + RESOURCE_DIR_NAME + "/" + r, temp.getAbsolutePath() + "/" + r)
-                        continue
-            else:
+                        logcat(f"Delete failed {f.getName()}.")
+
                 self.download_resources()
                 return
+
         except Exception as e:
             logcat(f"check_resources error: {e}")
 
