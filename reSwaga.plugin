@@ -1,44 +1,78 @@
-﻿import json
+import datetime
+import json
+import math
 import os
-import pathlib
+import random
+import textwrap
 import threading
+import time
 import requests
+import re
+
+from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
+
 from enum import Enum
 from typing import Optional, Any, Callable
 
+from PIL.Image import Resampling
 from android_utils import log, run_on_ui_thread
 from base_plugin import BasePlugin, HookResult, HookStrategy
-from client_utils import get_last_fragment
+from client_utils import get_last_fragment, get_user_config, get_send_messages_helper, send_message, \
+    get_messages_controller, send_request, get_messages_storage, get_account_instance
+from markdown_utils import parse_markdown
 from ui.alert import AlertDialogBuilder
 from ui.bulletin import BulletinHelper
-from ui.settings import Selector, Input, Divider, Header
+from ui.settings import Selector, Input, Divider, Header, Switch, Text
 
 from java.io import File
-from java.util import ArrayList
+from java.util import ArrayList, Locale
 
 from com.exteragram.messenger.plugins import PluginsController
 from com.exteragram.messenger.plugins.ui import PluginSettingsActivity
 
-from org.telegram.messenger import ApplicationLoader, R
+from org.telegram.tgnet import TLRPC, TLObject
+from org.telegram.tgnet.tl import TL_account
+from org.telegram.messenger import ApplicationLoader, R, AndroidUtilities, SendMessagesHelper
 
 __id__ = "reswag"
 __name__ = "reSwaga"
-__description__ = "свага💤"
+__description__ = "Плагин для отправки карточки текущего трека для сервисов Spotify и Я.Музыка"
 __icon__ = "remusic/0"
-__version__ = "1.0.0"
-__author__ = "@reNightly, @qmrrchh"
+__version__ = "1.0.1"
+__author__ = "@meeowPlugins"
 __min_version__ = "11.12.1"
 
 RESOURCE_DIR_NAME = "resources"
 RESOURCES = [
-    "strings-ru.json",
-    "strings-en.json",
+    "Onest-Regular.ttf",
+    "Onest-Bold.ttf",
+    "Onest.ttf",
+    "NotoSansJP-Regular.ttf",
+    "NotoSansJP-Bold.ttf",
+    "Circular-Regular.ttf",
+    "Circular-Bold.ttf"
 ]
 DOWNLOAD_URL = "https://raw.githubusercontent.com/cherryymerryy/reSwaga/main/"
 
 REMOTE_CONFIG_URL = DOWNLOAD_URL + "config.json"
 REMOTE_CONFIG = {}
 
+FONTS = {
+    0: "Onest",
+    1: "Circular",
+    2: "NotoSansJP"
+}
+
+DEFAULT_STREAM_STRING = "🎵 | {title} — {artists}"
+DEFAULT_VALUE = "platform value"
+DEFAULT_STREAM_TEXT = "🤙"
+DEFAULT_INSTANT_SUBTEXT = "Powered by"
+DEFAULT_INSTANT_MAIN_TEXT = __name__
+DEFAULT_COLOR = {
+    "background_color": "#000000",
+    "title_text_color": "#FFFFFF",
+    "subtext_color": "#A0A0A0"
+}
 
 def logcat(message):
     log(f"[{__id__}] {message}")
@@ -83,12 +117,6 @@ def read_remote_config():
         if req.status_code == 200:
             decoded_content = req.content.decode('utf-8-sig')
             REMOTE_CONFIG = json.loads(decoded_content)
-            logcat(REMOTE_CONFIG)
-
-            if REMOTE_CONFIG["resources_names"]:
-                RESOURCES = REMOTE_CONFIG["resources_names"]
-                logcat(RESOURCES)
-
             logcat("Remote config received.")
         else:
             logcat("Remote config not found.")
@@ -144,6 +172,222 @@ def _open_plugin_settings():
         logcat(f"Error opening plugin settings: {e}")
 
 
+class LocaleController:
+    def __init__(self):
+        super().__init__()
+        self.language: str = Locale.getDefault().getLanguage()
+
+    def get_controller(self):
+        if self.language == "ru":
+            return self.LanguageRussian()
+        # elif self.language == "pt":
+        #     return self.lang_ptbr()
+        else:
+            return self.LanguageEnglish()
+
+
+    class LanguageRussian:
+        language = "ru"
+
+        Settings_Auth_Header = "Сервис и Авторизация"
+        Settings_Auth_Platform = "Сервис"
+        Settings_Auth_Value_Text = "Значение"
+        Settings_Auth_Value_NotSelected_Text = "—"
+        Settings_Auth_Value_Spotify_Text = "Юзернейм"
+        Settings_Auth_Value_YandexMusic_Text = "Токен"
+        Settings_Auth_Value_SoundCloud_Text = "???"
+
+        Settings_CardSettings_Header = "Внешний вид"
+
+        Settings_BackgroundMode_Text = "Фон"
+        Settings_BackgroundMode_Item_1 = "Обложка трека"
+        Settings_BackgroundMode_Item_2 = "Цвет обложки"
+
+        Settings_Font_Text = "Шрифт"
+        Settings_Font_Item1 = "Onest"
+        Settings_Font_Item2 = "Spotify"
+        Settings_Font_Item3 = "NotoSansJP"
+
+        Settings_PlatformLink_Text = "Вставьте ссылку на ..."
+        Settings_PlatformLink_Item_1 = "—"
+        Settings_PlatformLink_Item_2 = "Трек"
+        Settings_PlatformLink_Item_3 = "Альбом"
+
+        Settings_SongLinkInclude_Text = "Ссылка на другие платформы"
+        Settings_SongLinkInclude_Subtext = "Добавляет ссылку на страницу песни на song.link"
+        Settings_FastCardRender_Text = "Предзагрузка карточек"
+        Settings_FastCardRender_Subtext = "Может увеличить расход батареи"
+
+        Setting_AdvancedMode_Text = "Расширенные настройки"
+        Setting_AdvancedMode_Subtext = "Дополнительные параметры кастомизации"
+        Setting_AdvancedMode_Title = "Настройка внешнего вида"
+
+        Settings_BackgroundColor_Text = "Цвет фона"
+        Settings_BackgroundColor_Subtext = "Цвет фона при выборе 'Цвет обложки' в параметре 'Фон'"
+
+        Settings_AccentColor_Text = "Акцентный цвет"
+        Settings_AccentColor_Subtext = "Цвет текста в названии трека и активном индикаторе прогресса"
+
+        Settings_SecondaryColor_Text = "Вторичный цвет"
+        Settings_SecondaryColor_Subtext = "Цвет текста для строки с артистом, неактивного прогресс-бара и таймеров"
+
+        Settings_InstantCardSubtext_Text = "Вторичный текст"
+        Settings_InstantCardSubtext_Subtext = "Текст в верхней части нижнего блока предзагруженных карточек"
+
+        Settings_InstantCardMainText_Text = "Основной текст"
+        Settings_InstantCardMainText_Subtext = "Текст в нижней части нижнего блока предзагруженных карточек"
+
+        Settings_Stream_Header = "Поток в профиль"
+
+        Setting_Stream_Title = "Настройки стрима"
+        Settings_Stream_Text = "Стрим трека в профиль"
+        Settings_Stream_Subtext = "Обновляет био/локацию текущим треком"
+
+        Settings_StreamAlert_Title = "⚠️⚠️ВНИМАНИЕ⚠️⚠️"
+        Settings_StreamAlert_Text = "Эта функция может работать нестабильно из-за ограничений Telegram на частую смену профиля. Ваши данные могут обновляться с задержкой. Используйте на свой страх и риск."
+
+        Setting_TrackStream_Text = "Стримить в..."
+        Setting_TrackStream_Item1 = "Био"
+        Setting_TrackStream_Item2 = "Локацию (рекомендуется)"
+
+        Settings_InStream_Text = "Текст по умолчанию"
+        Settings_InStream_Subtext = "Отображается, если плеер недоступен или ничего не воспроизводится"
+
+        Settings_FormatInStream_Text = "Формат"
+        Settings_FormatInStream_Subtext = "Формат отображения трека. {title} — название трека, {artists} — артист(ы)"
+
+        Settings_Other_Header = "Прочее"
+
+        Setting_Other_SourceCheck = "Проверка целостности файлов"
+        Setting_Other_ForceDownload = "Скачать все ресурсы заново"
+        Setting_Other_Donate = "Поддержать разработку"
+
+        Alert_HEX_Title = "⚠️ Ошибка HEX"
+        Alert_HEX_Text = "Недопустимый HEX-код цвета"
+        
+        Message_CaptionLink_Text = "[Yandex]({0})"
+        Message_CaptionSongLink_Text = "[song.link]({0})"
+        Message_CaptionDivider = " • "
+
+        Check_Value_NotValid = "Указанное значение сервиса не валидно."
+        Check_Platform_NotSelected = "Вы не указали используемый вами сервис."
+        Check_Resources_NotFound = "Необходимые ресурсы не найдены."
+        Check_Value_NotValid_Button = "Изменить"
+        Check_Platform_NotSelected_Button = "Выбрать"
+        Check_Resources_NotFound_Button = "Скачать"
+
+        SourceSuccess_Title = "Успешно"
+        SourceSuccess_Text = "Ошибок при проверке ресурсов не найдено"
+
+        Track_Not_Active = "Плеер неактивен."
+
+        Alert_Donate_Title = "Поддержка разработки"
+        Alert_Donate_Text = "Ниже вы можете скопировать TON-адрес разработчиков reMusic и поддержать проект донатом."
+        Alert_Donate_Button = "Скопировать"
+
+    class LanguageEnglish:
+        language = "en"
+
+        Settings_Auth_Header = "Service & Authorization"
+        Settings_Auth_Platform = "Service"
+        Settings_Auth_Value_Text = "Value"
+        Settings_Auth_Value_NotSelected_Text = "—"
+        Settings_Auth_Value_Spotify_Text = "Username"
+        Settings_Auth_Value_YandexMusic_Text = "Token"
+        Settings_Auth_Value_SoundCloud_Text = "???"
+
+        Settings_CardSettings_Header = "Customization"
+
+        Settings_BackgroundMode_Text = "Background"
+        Settings_BackgroundMode_Item_1 = "Track Cover"
+        Settings_BackgroundMode_Item_2 = "Cover Color"
+
+        Settings_Font_Text = "Font"
+        Settings_Font_Item1 = "Onest"
+        Settings_Font_Item2 = "Spotify"
+        Settings_Font_Item3 = "NotoSansJP"
+
+        Settings_PlatformLink_Text = "Insert link to ..."
+        Settings_PlatformLink_Item_1 = "—"
+        Settings_PlatformLink_Item_2 = "Track"
+        Settings_PlatformLink_Item_3 = "Album"
+
+        Settings_SongLinkInclude_Text = "Link to other platforms"
+        Settings_SongLinkInclude_Subtext = "Adds a link to the song page on song.link"
+        Settings_FastCardRender_Text = "Pre-render cards"
+        Settings_FastCardRender_Subtext = "May increase battery consumption"
+
+        Setting_AdvancedMode_Text = "Advanced Settings"
+        Setting_AdvancedMode_Subtext = "Additional customization settings"
+        Setting_AdvancedMode_Title = "Customization"
+
+        Settings_BackgroundColor_Text = "Background Color"
+        Settings_BackgroundColor_Subtext = "Background color if 'Cover Color' is selected in 'Background'"
+
+        Settings_AccentColor_Text = "Accent Color"
+        Settings_AccentColor_Subtext = "Text color used in track title and active progress bar"
+
+        Settings_SecondaryColor_Text = "Secondary Color"
+        Settings_SecondaryColor_Subtext = "Text color used for artist line, inactive progress bar, and timers"
+
+        Settings_InstantCardSubtext_Text = "Secondary Text"
+        Settings_InstantCardSubtext_Subtext = "Text displayed at the top of the bottom block of pre-rendered cards"
+
+        Settings_InstantCardMainText_Text = "Main Text"
+        Settings_InstantCardMainText_Subtext = "Text displayed at the bottom of the bottom block of pre-rendered cards"
+
+        Settings_Stream_Header = "Profile Streaming"
+
+        Setting_Stream_Title = "Stream settings"
+        Settings_Stream_Text = "Stream track to profile"
+        Settings_Stream_Subtext = "Updates your bio/location with the currently playing track"
+
+        Settings_StreamAlert_Title = "⚠️⚠️WARNING⚠️⚠️"
+        Settings_StreamAlert_Text = "This feature may work inconsistently due to Telegram's profile change limits. As a result, your profile information may not update immediately. Use at your own risk."
+
+        Setting_TrackStream_Text = "Stream to..."
+        Setting_TrackStream_Item1 = "Bio"
+        Setting_TrackStream_Item2 = "Location (Recommended)"
+
+        Settings_InStream_Text = "Default Text"
+        Settings_InStream_Subtext = "Text displayed when the player is unavailable or no track is playing"
+
+        Settings_FormatInStream_Text = "Format"
+        Settings_FormatInStream_Subtext = "Customize track display. {title} — track name, {artists} — artist(s)"
+
+        Settings_Other_Header = "Other"
+
+        Setting_Other_SourceCheck = "File Integrity Check"
+        Setting_Other_ForceDownload = "Download Full Resource Package"
+        Setting_Other_Donate = "Support Development"
+
+        Alert_HEX_Title = "⚠️ HEX Error"
+        Alert_HEX_Text = "Invalid HEX color code"
+        
+        Message_CaptionLink_Text = "[Yandex]({0})"
+        Message_CaptionSongLink_Text = "[song.link]({0})"
+        Message_CaptionDivider = " • "
+
+        Check_Value_NotValid = "Platform value is not valid."
+        Check_Platform_NotSelected = "You can't use command without selected platform."
+        Check_Resources_NotFound = "Plugin resources not found."
+        Check_Value_NotValid_Button = "Change"
+        Check_Platform_NotSelected_Button = "Select"
+        Check_Resources_NotFound_Button = "Download"
+
+        SourceSuccess_Title = "Success"
+        SourceSuccess_Text = "No issues detected during resource check"
+
+        Track_Not_Active = "Player not active."
+
+        Alert_Donate_Title = "Support Development"
+        Alert_Donate_Text = "Below you can copy the TON address of the reMusic developers and support the development with your donation."
+        Alert_Donate_Button = "Copy"
+
+
+locale = LocaleController().get_controller()
+
+
 class Track:
     def __init__(
             self,
@@ -181,7 +425,6 @@ class Platform(Enum):
 
 class BasePlatform:
     def __init__(self, value: str):
-        self.poller_enabled: bool = False
         self.now_track: Optional[Track] = None
 
         if value:
@@ -189,24 +432,10 @@ class BasePlatform:
         else:
             logcat("Value is none.")
 
+        self.memory_id: int = 0
+
     def get_track(self) -> Optional[Track]:
         pass
-
-    def poller(self):
-        pass
-
-    def start_poller(self):
-        if not self.poller_enabled:
-            self.poller_enabled = True
-            threading.Thread(target=self.poller, daemon=True).start()
-        else:
-            logcat("Poller already started.")
-
-    def stop_poller(self):
-        if self.poller_enabled:
-            self.poller_enabled = False
-        else:
-            logcat("Poller not started for stopping.")
 
 
 class Spotify(BasePlatform):
@@ -221,9 +450,9 @@ class Spotify(BasePlatform):
 
     def get_track(self) -> Optional[Track]:
         data = requests.get(f"https://api.stats.fm/api/v1/users/{self.username}/streams/current", headers=self.headers)
-        if data.status_code == 204:
-            return Track(active=False)
-        elif data.status_code != 200:
+
+        if data.status_code == 204 or data.status_code != 200:
+            self.now_track = Track(active=False)
             return Track(active=False)
         else:
             data = data.json()['item']
@@ -244,8 +473,10 @@ class Spotify(BasePlatform):
                     device=data['deviceName']
                 )
             else:
+                self.now_track = Track(active=False)
                 track = Track(active=False)
 
+            self.now_track = track
             return track
 
     def get_album_link(self, internal_track_id) -> Optional[str]:
@@ -258,7 +489,8 @@ class Spotify(BasePlatform):
                 try:
                     album_id = data[0]['externalIds']['spotify'][0]
                     return f"https://open.spotify.com/album/{album_id}"
-                except:
+                except Exception as e:
+                    logcat("[Spotify] get_album_link: " + str(e))
                     return None
             else:
                 return None
@@ -267,24 +499,27 @@ class Spotify(BasePlatform):
 class YandexMusic(BasePlatform):
     def __init__(self, value: str):
         super().__init__(value)
-        self.api_url: str = "https://track.mipoh.ru/"
+        self.api_url: str = "https://track.mipoh.ru"
         self.token = value.strip()
         self.headers = {"User-Agent": "Mozilla/5.0", "Accept": "application/json", "ya-token": self.token}
 
     def get_track(self) -> Optional[Track]:
         if not self.token:
+            self.now_track = Track(active=False)
             return Track(active=False)
+
         try:
             r = requests.get(f"{self.api_url}/get_current_track_beta", headers=self.headers, timeout=10, verify=False)
-            logcat(f"[YandexMusic] get_current_track status={r.status_code}, body={r.text[:200]}")
+            logcat(f"[YandexMusic] get_current_track status={r.status_code}")
             data = r.json()
-            logcat(f"[YandexMusic] get_current_track data keys={list(data.keys())}")
+
             if r.status_code != 200 or 'track' not in data:
                 logcat("[YandexMusic] no 'track' key or bad status")
+                self.now_track = Track(active=False)
                 return Track(active=False)
+
             t = data['track']
-            logcat(f"[YandexMusic] raw track: {t}")
-            tid = t.get('track_id')
+
             raw_artist = t.get('artist', '')
             if isinstance(raw_artist, str):
                 artists = [x.strip() for x in raw_artist.split(',') if x.strip()]
@@ -292,38 +527,32 @@ class YandexMusic(BasePlatform):
                 artists = raw_artist
             else:
                 artists = []
-            album = t.get('album')
-            thumb = t.get('img')
-            duration = int(t.get('duration', 0))
-            progress_ms_raw = data.get('progress_ms', 0)
-            try:
-                progress_ms = int(progress_ms_raw)
-            except:
-                progress_ms = 0
-            progress = progress_ms // 1000
+
             track = Track(
                 active=True,
-                track_id=tid,
+                track_id=t.get('track_id'),
                 title=t.get('title'),
                 artist=artists,
-                album=album,
-                thumb=thumb,
-                duration=duration,
-                progress=progress,
-                link=f"https://music.yandex.ru/track/{tid}",
+                album=t.get('album'),
+                thumb=t.get('img'),
+                duration=int(t.get('duration', 0)),
+                progress=int(data.get('progress_ms', 0)) // 1000,
+                link=f"https://music.yandex.ru/track/{t.get('track_id')}",
                 download_url=t.get('download_link')
             )
-            logcat(f"[YandexMusic] built track: {track.title} — {track.artist}, album={track.album}, duration={track.duration}, progress={track.progress}")
+            self.now_track = track
+            logcat(f"[YandexMusic] built track: {track.title} — {track.artist}")
             return track
         except Exception as e:
             logcat(f"[YandexMusic] get_current_track exception: {e}")
+            self.now_track = Track(active=False)
             return Track(active=False)
 
 
 class SoundCloud(BasePlatform):
     def __init__(self, value: str):
         super().__init__(value)
-        self.api_url: str = "https://track.mipoh.ru/"
+        self.api_url: str = ""
         self.token = value.strip()
 
     def get_track(self) -> Optional[Track]:
@@ -343,85 +572,530 @@ def get_platform(platform: int) -> Platform:
         return Platform.NotSelected
 
 
+def copy(to_copy: Any):
+    if AndroidUtilities.addToClipboard(to_copy):
+        BulletinHelper.show_copied_to_clipboard()
+
+
+def _delete_file_delayed(path, delay=60):
+    def action():
+        try:
+            time.sleep(delay)
+            if os.path.exists(path):
+                os.remove(path)
+                log(f"Deleted temp file: {path}")
+        except Exception as e:
+            log(f"Delayed delete error: {e}")
+
+    threading.Thread(target=action, daemon=True).start()
+
+
 class ReSwagaPlugin(BasePlugin):
     def __init__(self):
         super().__init__()
-        if not self.enabled: return
+
+        if not self.enabled:
+            logcat("Plugin initializing canceled, because plugin disabled.")
+            return
+
         self.platform: Optional[BasePlatform] = None
         self.spinner: Optional[AlertDialogBuilder] = None
         self.info: Optional[AlertDialogBuilder] = None
         self.loading: Optional[AlertDialogBuilder] = None
+        self.poller_enabled: bool = False
 
     def on_plugin_load(self):
-        if not self.enabled: return
+        if not self.enabled:
+            logcat("Plugin load canceled, because plugin disabled.")
+            return
+
         self.add_on_send_message_hook()
         _get_temp_dir()
+        threading.Thread(target=self.check_resources, args=(False,)).start()
         threading.Thread(target=read_remote_config, daemon=True).start()
+
         self.update_platform_object(self.get_setting("selected_platform", 0), True)
-        threading.Thread(target=self.check_resources).start()
-        logcat(f"plugin loaded")
+
+        self.poller_enabled = any([self.get_setting("stream_bio_enabled", False), self.get_setting("fast_card_render", False)])
+        if self.poller_enabled:
+            self.start_poller()
+
+        logcat(f"Plugin loaded.")
 
     def on_plugin_unload(self):
-        logcat(f"plugin unloaded")
+        if self.poller_enabled:
+            self.stop_poller()
+        logcat(f"Plugin unloaded.")
 
     def create_settings(self):
         selected_platform = self.get_setting("selected_platform", 0)
+        is_value_valid = self.is_platform_value_valid(selected_platform)
 
         settings = [
-            Header("Service & Authorization"),
+            Header(text=locale.Settings_Auth_Header),
             Selector(
                 key="selected_platform",
-                text="платформа",
-                items=["Не выбрано", "Spotify", "Yandex.Music", "SoundCloud"],
+                text=locale.Settings_Auth_Platform,
+                items=[locale.Settings_Auth_Value_NotSelected_Text, "Spotify", "Yandex.Music", "SoundCloud"],
                 default=0,
                 on_change=lambda new_value: self.update_platform_object(new_value, False)
-            ),
+            )
+        ]
+
+        if selected_platform == int(Platform.NotSelected.value):
+            return settings
+
+        if selected_platform == int(Platform.Spotify.value):
+            value_text = locale.Settings_Auth_Value_Spotify_Text
+        elif selected_platform == int(Platform.YandexMusic.value):
+            value_text = locale.Settings_Auth_Value_YandexMusic_Text
+        elif selected_platform == int(Platform.SoundCloud.value):
+            value_text = locale.Settings_Auth_Value_SoundCloud_Text
+        else:
+            value_text = locale.Settings_Auth_Value_NotSelected_Text
+
+        settings += [
             Input(
                 key="value",
-                text="token",
+                text=value_text,
                 on_change=lambda z: self.update_platform_object(self.get_setting("selected_platform", 0), True)
-            ) if selected_platform != int(Platform.NotSelected.value) else None,
+            ) if selected_platform != int(Platform.NotSelected.value) else None
+        ]
+
+        if not is_value_valid:
+            return settings
+
+        advanced = self.get_setting('advanced_mode', False)
+        stream_bio_enabled = self.get_setting("stream_bio_enabled", False)
+
+        settings += [
+            Divider(),
+
+            Header(text=locale.Settings_CardSettings_Header),
+            Selector(
+                key="background",
+                text=locale.Settings_BackgroundMode_Text,
+                default=1,
+                items=[
+                    locale.Settings_BackgroundMode_Item_1,
+                    locale.Settings_BackgroundMode_Item_2
+                ],
+                icon="msg_photos"
+            ),
+            Selector(
+                key="font",
+                text=locale.Settings_Font_Text,
+                default=0,
+                items=[
+                    locale.Settings_Font_Item1,
+                    locale.Settings_Font_Item2,
+                    locale.Settings_Font_Item3
+                ],
+                icon="msg_photo_text_regular"
+            ),
+            Selector(
+                key="platform_link",
+                text=locale.Settings_PlatformLink_Text,
+                default=1,
+                items=[
+                    locale.Settings_PlatformLink_Item_1,
+                    locale.Settings_PlatformLink_Item_2,
+                    locale.Settings_PlatformLink_Item_3
+                ],
+                icon="msg_link2"
+            ),
+            Switch(
+                key="songlink_link_include",
+                text=locale.Settings_SongLinkInclude_Text,
+                default=True,
+                subtext=locale.Settings_SongLinkInclude_Subtext,
+                icon="msg_language"
+            ),
+            Switch(
+                key="fast_card_render",
+                text=locale.Settings_FastCardRender_Text,
+                default=False,
+                subtext=locale.Settings_FastCardRender_Subtext,
+                on_change=lambda new_value: self.set_fast_card_render_enabled(new_value),
+                icon="boosts_solar"
+            ),
+
+            Switch(
+                key="advanced_mode",
+                text=locale.Setting_AdvancedMode_Text,
+                default=False,
+                subtext=locale.Setting_AdvancedMode_Subtext,
+                icon="msg_palette"
+            ),
+            Text(
+                text=locale.Setting_AdvancedMode_Title,
+                icon="msg_download_settings",
+                create_sub_fragment=self.create_customization_settings
+            ) if advanced else None,
 
             Divider(),
 
-            Header("Resources"),
+            Header(text=locale.Settings_Stream_Header),
+            Switch(
+                key="stream_bio_enabled",
+                text=locale.Settings_Stream_Text,
+                default=False,
+                subtext=locale.Settings_Stream_Subtext,
+                on_change=lambda new_value: self.set_stream_bio_enabled(new_value),
+                icon="msg_online"
+            ),
+            Text(
+                text=locale.Setting_Stream_Title,
+                icon="msg_download_settings",
+                create_sub_fragment=self.create_stream_settings
+            ) if stream_bio_enabled else None,
+
+            Header(text=locale.Settings_Other_Header),
+            Text(
+                text=locale.Setting_Other_SourceCheck,
+                icon="msg_noise_on",
+                on_click=lambda view: self.check_resources(True, True)
+            ),
+            Text(
+                text=locale.Setting_Other_ForceDownload,
+                icon="msg_download",
+                # on_click=lambda view: self.force_source_downloader()
+            ),
+            Text(
+                text=locale.Setting_Other_Donate,
+                icon="msg_ton",
+                accent=True,
+                on_click=lambda view: self.show_info_alert(
+                    title=locale.Alert_Donate_Title,
+                    message=locale.Alert_Donate_Text,
+                    positive_text="OK",
+                    neutral_text=locale.Alert_Donate_Button,
+                    neutral_listener=lambda: copy("UQBVxjueXqAEpALX_b0yr-ytXN26LOTpSBn26b9VRHKrmm5F")
+                )
+            )
         ]
 
         return settings
 
+    def create_customization_settings(self):
+        instant_card = self.get_setting("fast_card_render", False)
+        return [
+            Input(
+                key="background_color",
+                text=locale.Settings_BackgroundColor_Text,
+                default=DEFAULT_COLOR["background_color"],
+                subtext=locale.Settings_BackgroundColor_Subtext,
+                icon="menu_feature_custombg",
+                on_change=lambda new_value: self.is_hex_valid(new_value, "background_color")
+            ) if self.get_setting("background", 1) == 1 else None,
+            Input(
+                key="title_text_color",
+                text=locale.Settings_AccentColor_Text,
+                default=DEFAULT_COLOR["title_text_color"],
+                subtext=locale.Settings_AccentColor_Subtext,
+                icon="msg_photo_text_framed",
+                on_change=lambda new_value: self.is_hex_valid(new_value, "title_text_color")
+            ),
+            Input(
+                key="subtext_color",
+                text=locale.Settings_SecondaryColor_Text,
+                default=DEFAULT_COLOR["subtext_color"],
+                subtext=locale.Settings_SecondaryColor_Subtext,
+                icon="msg_photo_text_framed2",
+                on_change=lambda new_value: self.is_hex_valid(new_value, "subtext_color")
+            ),
+            Input(
+                key="instant_subtext",
+                text=locale.Settings_InstantCardSubtext_Text,
+                default=DEFAULT_INSTANT_SUBTEXT,
+                subtext=locale.Settings_InstantCardSubtext_Subtext,
+                icon="menu_feature_intro"
+            ) if instant_card else None,
+            Input(
+                key="instant_main_text",
+                text=locale.Settings_InstantCardMainText_Text,
+                default=DEFAULT_INSTANT_MAIN_TEXT,
+                subtext=locale.Settings_InstantCardMainText_Subtext,
+                icon="menu_feature_cover"
+            ) if instant_card else None,
+        ]
+
+    def create_stream_settings(self):
+        stream_bio_enabled = self.get_setting("stream_bio_enabled", False)
+        return [
+            Selector(
+                key="stream_place",
+                text=locale.Setting_TrackStream_Text,
+                default=0,
+                items=[
+                    locale.Setting_TrackStream_Item1,
+                    locale.Setting_TrackStream_Item2,
+                ],
+                icon="menu_premium_location" if self.get_setting("stream_place", 0) else "msg_openprofile"
+            ) if get_user_config().isPremium() and stream_bio_enabled else None,
+            Input(
+                key="default_stream_text",
+                text=locale.Settings_InStream_Text,
+                default=DEFAULT_STREAM_TEXT,
+                subtext=locale.Settings_InStream_Subtext,
+                icon="msg_photo_text_framed3"
+            ) if stream_bio_enabled else None,
+            Input(
+                key="track_display_format",
+                text=locale.Settings_FormatInStream_Text,
+                default=DEFAULT_STREAM_STRING,
+                subtext=locale.Settings_FormatInStream_Subtext,
+                icon="msg_view_file"
+            ) if stream_bio_enabled else None,
+        ]
+
     def on_send_message_hook(self, account: int, params: Any):
-        text = params.message
+        if hasattr(params, 'message') and isinstance(params.message, str):
+            text = str(params.message)
+            if text.startswith(".now"):
+                platform = self.get_setting("selected_platform", 0)
 
-        if text == ".now":
-            platform = self.get_setting("selected_platform", 0)
+                if self.is_args_not_valid(platform):
+                    return HookResult(strategy=HookStrategy.CANCEL)
 
-            if platform == 0 or self.platform is None:
-                BulletinHelper.show_error("You can't use command without selected platform.")
+                if text == ".now" or text == ". now":
+                    threading.Thread(
+                        target=self.send_card_message,
+                        args=(params,),
+                        daemon=True
+                    ).start()
+
+                elif text == ".nowt" or text == ". nowt":
+                    threading.Thread(
+                        target=self.send_audio_message,
+                        args=(params.peer, params.replyToMsg, params.replyToTopMsg),
+                        daemon=True
+                    ).start()
+
                 return HookResult(strategy=HookStrategy.CANCEL)
 
-            threading.Thread(target=self.debug_show_track, daemon=True).start()
-            return HookResult(strategy=HookStrategy.CANCEL)
+            else:
+                return HookResult(strategy=HookStrategy.DEFAULT)
+
+        elif hasattr(params, 'caption') and isinstance(params.caption, str):
+            metadata_flag = f"{__name__}_flag_metadata"
+            markdown_flag = f"{__name__}_flag_markdown"
+
+            if metadata_flag in params.caption:
+                if self.poller_enabled:
+                    track = self.platform.now_track
+                else:
+                    track = self.platform.get_track()
+
+                for i in range(params.document.attributes.__str__().split(",").__len__()):
+                    if "title" in dir(params.document.attributes.get(i)):
+                        params.document.attributes.get(i).title = track.title if track.active else f"[{__name__}] ERROR"
+                        params.document.attributes.get(i).performer = ", ".join(track.artist) if track.active else locale.Track_Not_Active
+                        params.document.attributes.get(i).duration = track.duration if track.active else 0
+
+                markdown = markdown_flag in params.caption
+                if metadata_flag in params.caption:
+                    params.caption = params.caption.replace(" " + metadata_flag, "")
+
+                if markdown:
+                    params.caption = params.caption.replace(" " + markdown_flag, "")
+                    caption = parse_markdown(params.caption)
+                    params.caption = caption.text
+                    params.entities = ArrayList()
+                    for i in caption.entities:
+                        params.entities.add(i.to_tlrpc_object())
+
+                return HookResult(HookStrategy.MODIFY, params=params)
+            else:
+                return HookResult(strategy=HookStrategy.DEFAULT)
+
         else:
             return HookResult(strategy=HookStrategy.DEFAULT)
 
-    def debug_show_track(self):
-        run_on_ui_thread(lambda: self.show_spinner())
+    def is_platform_value_valid(self, platform: int) -> bool:
+        value = str(self.get_setting("value", DEFAULT_VALUE))
+        if platform == int(Platform.YandexMusic.value):
+            return value.startswith("y0__") and not len(value) <= 4 and not value in ["", None, DEFAULT_VALUE]
+        else:
+            return not value in ["", None, DEFAULT_VALUE]
 
+    def send_card_message(self, msg_params):
         try:
-            track = self.platform.get_track()
+            run_on_ui_thread(lambda: self.show_spinner())
+            params = {
+                "message": None,
+                "peer": msg_params.peer
+            }
+
+            if self.poller_enabled:
+                track = self.platform.now_track
+            else:
+                track = self.platform.get_track()
+
             if track is None:
-                show_error("track not found")
+                logcat("not t")
+                run_on_ui_thread(lambda: self.dismiss_spinner())
+                show_error(locale.Track_Not_Active)
                 return
 
             if not track.active:
-                show_error("track not active")
+                logcat("not ta")
+                run_on_ui_thread(lambda: self.dismiss_spinner())
+                show_error(locale.Track_Not_Active)
                 return
 
-            show_info(f"{track.title} | {track.artist}")
-        except Exception as e:
-            logcat(f"debug_show_track error: {e}")
+            temp_dir = _get_temp_dir()
+            temp_file_path = None
 
-        run_on_ui_thread(lambda: self.dismiss_spinner())
+            answer = self._make_card() if not (self.get_setting("fast_card_render", False)) else True
+            if answer:
+                temp_file_path = File(temp_dir, f"now_{__name__}.png").getAbsolutePath()
+
+            if temp_file_path in ["", None]:
+                logcat("not tfp")
+                run_on_ui_thread(lambda: self.dismiss_spinner())
+                show_error(locale.Track_Not_Active)
+                return
+
+            generated_photo = get_send_messages_helper().generatePhotoSizes(temp_file_path, None)
+
+            if generated_photo is None:
+                logcat("not gp")
+                run_on_ui_thread(lambda: self.dismiss_spinner())
+                show_error(locale.Track_Not_Active)
+                return
+
+            params["photo"] = generated_photo
+            params["path"] = temp_file_path
+            params["replyToMsg"] = msg_params.replyToMsg
+            params["replyToTopMsg"] = msg_params.replyToTopMsg
+
+            if not track.active:
+                logcat("not t2")
+                show_error(locale.Track_Not_Active)
+                run_on_ui_thread(lambda: self.dismiss_spinner())
+                return
+
+            platform_link: int = self.get_setting("platform_link", 1)
+            songlink: bool = self.get_setting("songlink_link_include", True)
+            caption = ""
+
+            if any([platform_link != 0, songlink]):
+                caption = random.choice(["[🎵](5188621441926438751) | ", "[🎶](5188705588925702510) | "])
+
+            if platform_link and platform_link != 0:
+                link = track.link if (platform_link == 1 or track is None) else track.album
+                caption += locale.Message_CaptionLink_Text.format(link)
+
+            if songlink and songlink != 0:
+                if platform_link != 0:
+                    caption += locale.Message_CaptionDivider
+
+                sl_platform: str = ""
+                platform = self.get_setting("selected_platform", 0)
+
+                if platform == int(Platform.Spotify.value):
+                    sl_platform = 's'
+                elif platform == int(Platform.YandexMusic.value):
+                    sl_platform = 'ya'
+
+                caption += locale.Message_CaptionSongLink_Text.format(
+                    f"https://song.link/{sl_platform}/{track.track_id}")
+
+            if any([platform_link != 0, songlink]):
+                caption = parse_markdown(caption)
+                params["caption"] = caption.text
+                params["entities"] = set()
+                for i in caption.entities:
+                    params["entities"].add(i.to_tlrpc_object())
+
+            run_on_ui_thread(lambda: send_message(params))
+            run_on_ui_thread(lambda: self.dismiss_spinner())
+        except Exception as e:
+            logcat(f"send_card_message {e}")
+
+    def send_audio_message(self, dialog_id, reply_to_msg, reply_to_top_msg):
+        run_on_ui_thread(lambda: self.show_spinner())
+
+        if self.poller_enabled:
+            track = self.platform.now_track
+        else:
+            track = self.platform.get_track()
+
+        if not track.active:
+            run_on_ui_thread(lambda: self.dismiss_spinner())
+            show_error(locale.Track_Not_Active)
+            return
+
+        url = track.download_url
+        if not url:
+            run_on_ui_thread(lambda: self.dismiss_spinner())
+            BulletinHelper.show_error("No download link")
+            return
+
+        try:
+            temp_dir = _get_temp_dir()
+            temp_dir_name = "swaga_temp"
+
+            ext = os.path.splitext(url)[1] or ".mp3"
+            filename = f"{track.title}{ext}"
+            file_path = File(temp_dir, filename).getAbsolutePath()
+            resp = requests.get(url, stream=True, timeout=60)
+            resp.raise_for_status()
+
+            with open(file_path, 'wb') as f:
+                for chunk in resp.iter_content(8192): f.write(chunk)
+
+            ext_root = ApplicationLoader.applicationContext.getExternalCacheDir()
+            plugin_dir = File(ext_root, temp_dir_name)
+
+            if not plugin_dir.exists() and not plugin_dir.mkdirs():
+                pass
+
+            ext_path = File(plugin_dir, File(file_path).getName()).getAbsolutePath()
+
+            with open(file_path, 'rb') as fin, open(ext_path, 'wb') as fout:
+                fout.write(fin.read())
+
+            account = get_account_instance()
+            mime = "audio/mpeg"
+            markdown_need = False
+            yandex_link = self.get_setting("platform_link", 1)
+            songlink = self.get_setting("songlink_link_include", True)
+            caption = ""
+
+            if any([yandex_link != 0, songlink]):
+                markdown_need = True
+                caption = random.choice(["[🎵](5188621441926438751) | ", "[🎶](5188705588925702510) | "])
+
+            if yandex_link and yandex_link != 0:
+                link = track.link if (yandex_link == 1 or track is None) else track.album
+                caption += locale.Message_CaptionLink_Text.format(link)
+
+            if songlink and songlink != 0:
+                if yandex_link != 0:
+                    caption += locale.Message_CaptionDivider
+                caption += locale.Message_CaptionSongLink_Text.format(f"https://song.link/ya/{track.track_id}")
+
+            SendMessagesHelper.prepareSendingDocument(
+                account,
+                ext_path,
+                ext_path,
+                None,
+                f"{caption} {__name__}_flag_metadata{f' {__name__}_flag_markdown' if markdown_need else ''}",
+                mime,
+                dialog_id,
+                reply_to_msg,
+                reply_to_top_msg,
+                None, None, None, True, 0, None, None, 0, False
+            )
+
+            run_on_ui_thread(lambda: self.dismiss_spinner())
+            _delete_file_delayed(file_path)
+            _delete_file_delayed(ext_path)
+        except Exception as e:
+            run_on_ui_thread(lambda: self.dismiss_spinner())
+            show_error(str(e))
 
     def update_platform_object(self, new_platform: int, value: bool):
         if not value:
@@ -444,24 +1118,487 @@ class ReSwagaPlugin(BasePlugin):
         else:
             logcat(f"Unknown platform ({new_platform})")
 
-    def check_resources(self):
+    def is_args_not_valid(self, platform: int) -> bool:
+        if platform == int(Platform.NotSelected.value) or self.platform is None:
+            BulletinHelper.show_with_button(
+                locale.Check_Platform_NotSelected,
+                R.raw.error,
+                locale.Check_Platform_NotSelected_Button,
+                on_click=lambda: _open_plugin_settings()
+            )
+            return True
+
+        elif not self.is_platform_value_valid(platform):
+            BulletinHelper.show_with_button(
+                locale.Check_Value_NotValid,
+                R.raw.error,
+                locale.Check_Value_NotValid_Button,
+                on_click=lambda: _open_plugin_settings()
+            )
+            return True
+
+        # elif self.check_resources(True, False):
+        #     BulletinHelper.show_with_button(
+        #         locale.Check_Resources_NotFound,
+        #         R.raw.error,
+        #         locale.Check_Resources_NotFound_Button,
+        #         on_click=lambda: self.download_resources()
+        #     )
+        #     return True
+
+        else:
+            return False
+
+    def set_fast_card_render_enabled(self, enable: bool):
+        if enable:
+            if self.poller_enabled:
+                logcat("Poller already enabled, no need to enable")
+                return
+            else:
+                self.start_poller()
+
+    def set_stream_bio_enabled(self, enable: bool):
+        if enable:
+            if not self.poller_enabled:
+                logcat("Poller is disabled, starting...")
+                self.start_poller()
+
+            stream_place = self.get_setting("stream_place", 0)
+            default_stream_text = self.get_setting("default_stream_text", DEFAULT_STREAM_TEXT)
+
+            client_user_id = get_user_config().getClientUserId()
+            if client_user_id is None or client_user_id == 0:
+                logcat("Client userId not found")
+                return
+
+            user_full = get_messages_controller().getUserFull(client_user_id)
+            if user_full is None:
+                logcat("User fullInfo not found")
+                return
+
+            if stream_place == 0:  # current bio
+                if user_full.about and user_full.about != default_stream_text:
+                    if not str(user_full.about).startswith("🎵 | "):
+                        self.set_setting("default_stream_text", user_full.about)
+
+            elif stream_place == 1:  # current address
+                if user_full.business_location and user_full.business_location.address and user_full.business_location.address != default_stream_text:
+                    if not str(user_full.business_location.address).startswith("🎵 | "):
+                        self.set_setting("default_stream_text", user_full.business_location.address)
+
+            else:  # Index out of range
+                self.set_setting("default_stream_text", DEFAULT_STREAM_TEXT)
+
+            self.set_stream_text(False)
+        else:
+            self.set_stream_text(True)
+
+    def set_stream_text(self, default: bool):
+        stream_place = self.get_setting("stream_place", 0)
+
+        client_user_id = get_user_config().getClientUserId()
+        if client_user_id is None or client_user_id == 0:
+            logcat("Client userId not found")
+            return
+
+        user_full = get_messages_controller().getUserFull(client_user_id)
+        if user_full is None:
+            logcat("User fullInfo not found")
+            return
+
+        current_text: str = ""
+
+        if stream_place == 0:  # current bio
+            if user_full.about:
+                current_text = user_full.about
+
+        elif stream_place == 1:  # current address
+            if user_full.business_location and user_full.business_location.address:
+                current_text = user_full.business_location.address
+
+        else:
+            logcat("Index out of range. Can't get current bio text.")
+
+        if self.platform is None or self.platform.now_track is None:
+            return
+
+        text_to_set: str
+
+        if default:
+            text_to_set = self.get_setting("default_stream_text", DEFAULT_STREAM_TEXT)
+        else:
+            if self.platform and self.platform.now_track and self.platform.now_track.active:
+                text_to_set = self.get_setting("track_display_format", DEFAULT_STREAM_STRING)
+                text_to_set = text_to_set.replace("{title}", self.platform.now_track.title)
+                text_to_set = text_to_set.replace("{artists}", ", ".join(self.platform.now_track.artist))
+            else:
+                logcat("Poller check: No active track to display. No changes needed.")
+                return
+
+        final_text_to_set = text_to_set
+        if stream_place == 0:
+            max_len = 140 if get_user_config().isPremium() else 70
+            final_text_to_set = text_to_set[:max_len]
+        elif stream_place == 1:
+            final_text_to_set = text_to_set[:96]
+
+        if final_text_to_set == current_text:
+            logcat("No need to update bio.")
+            return
+
+        if stream_place == 0:  # in bio
+            # online update
+            request = TL_account.updateProfile()
+            request.flags = 4
+            request.about = final_text_to_set
+
+            # local update
+            user_full.flags = 2
+            user_full.about = final_text_to_set
+
+        elif stream_place == 1:  # in business location
+            # online update
+            request = TL_account.updateBusinessLocation()
+            request.flags = 1
+            request.address = final_text_to_set
+
+            # local update
+            user_full.flags2 = 2
+            user_full.business_location = TLRPC.TL_businessLocation()
+            user_full.business_location.address = final_text_to_set
+
+        else:  # out of range
+            logcat("Stream place index out of range.")
+            return
+
+        if request:
+            try:
+                send_request(request, ())
+                get_messages_storage().updateUserInfo(user_full, False)
+                logcat(f"Updating bio to \"{text_to_set}\"...")
+            except Exception as e:
+                logcat(f"set_stream_text exception: {e}")
+
+    def poller(self):
+        try:
+            while self.poller_enabled:
+                logcat("Polling...")
+
+                stream_bio_enabled: bool = self.get_setting("stream_bio_enabled", False)
+                fast_card_render: bool = self.get_setting("fast_card_render", False)
+
+                if not any([stream_bio_enabled, fast_card_render]):
+                    logcat("Stream Bio and Fast Card Render is disabled, stopping poller...")
+                    self.stop_poller()
+                    return
+
+                stream_place = self.get_setting("stream_place", 0)
+
+                if stream_bio_enabled and stream_place == 0:
+                    sleep_time = 10
+                elif stream_bio_enabled and stream_place == 1:
+                    sleep_time = 5
+                else:
+                    sleep_time = 5
+
+                if self.platform:
+                    self.platform.get_track()
+
+                    if stream_bio_enabled:
+                        self.set_stream_text(False)
+
+                    if fast_card_render:
+                        if self.platform.memory_id != self.platform.now_track.track_id:
+                            logcat("MemoryID not equals with Current trackID, making new card.")
+                            self.platform.memory_id = self.platform.now_track.track_id
+                            self._make_card()
+                        else:
+                            logcat("MemoryID equals with Current trackID, no need to make new card.")
+                else:
+                    logcat("Platform is None, stopping poller...")
+                    self.stop_poller()
+                    return
+
+                time.sleep(sleep_time)
+        except Exception as e:
+            logcat(f"poller exception: {e}")
+
+    def start_poller(self):
+        self.poller_enabled = True
+        threading.Thread(target=self.poller, daemon=True).start()
+        logcat("Poller started.")
+
+    def stop_poller(self):
+        self.poller_enabled = False
+        if self.get_setting("stream_bio_enabled", False):
+            self.set_stream_text(True)
+        logcat("Poller disabled.")
+
+    def _make_card(self):
+        track = self.platform.now_track
+        temp_dir = _get_temp_dir()
+        font_family = self.get_setting("font", 0)
+        font_family = FONTS[font_family]
+        width, height = 1440, 600
+
+        advanced_mode = self.get_setting("advanced_mode", False)
+        if not advanced_mode:
+            background_color = DEFAULT_COLOR["background_color"]
+            title_text_color = DEFAULT_COLOR["title_text_color"]
+            subtext_color = DEFAULT_COLOR["subtext_color"]
+        else:
+            background_color = self.get_setting("background_color", DEFAULT_COLOR["background_color"])
+            title_text_color = self.get_setting("title_text_color", DEFAULT_COLOR["title_text_color"])
+            subtext_color = self.get_setting("subtext_color", DEFAULT_COLOR["subtext_color"])
+
+        if not track.active:
+            if locale.language == 'ru' and font_family == "Circular":
+                font_family = "Onest"
+
+            card = Image.new('RGB', (width, height), background_color)
+            draw = ImageDraw.Draw(card)
+
+            regular_plugin_font = File(temp_dir, f"{font_family}-Regular.ttf").getAbsolutePath()
+            bold_plugin_font = File(temp_dir, f"{font_family}-Bold.ttf").getAbsolutePath()
+            plugin_font = ImageFont.truetype(regular_plugin_font, 40)
+            not_active_font = ImageFont.truetype(bold_plugin_font, 80)
+
+            draw.text(
+                xy = (width // 2, 45),
+                text = __name__,
+                font=plugin_font,
+                fill=title_text_color,
+                align="center",
+                anchor="mm"
+            )
+
+            draw.text(
+                xy = (width // 2, height // 2),
+                text = "player_not_active_text",
+                font=not_active_font,
+                fill=title_text_color,
+                align="center",
+                anchor="mm"
+            )
+
+            filename = f"now_{__name__}.png"
+            temp_photo_path = File(temp_dir, filename).getAbsolutePath()
+            card.save(temp_photo_path)
+            return temp_photo_path
+
+        background_setting = self.get_setting("background", 1)
+
+        thumb = requests.get(track.thumb, stream=True).raw
+        background = Image.open(thumb)
+        thumbnail = background.copy()
+
+        if background_setting == 0:
+            background = background.resize((width, width)).crop((0, (width - height) // 2, width, width)).filter(
+                ImageFilter.GaussianBlur(radius=14))
+            background = ImageEnhance.Brightness(background).enhance(0.3)
+            card = Image.new('RGB', (width, height), background_color)
+            card.paste(background, (0, 0))
+        elif not advanced_mode:
+            img = background.resize((16, 16), Resampling.LANCZOS)
+            pixels = img.load()
+            l_width, l_height = img.size
+
+            for y in range(l_height):
+                for x in range(l_width):
+                    if img.mode == 'L':
+                        r = pixels[x, y]
+                        r = math.pow(r / 255.0, 1 / 2.2) * 255.0
+                        pixels[x, y] = int(r)
+                    else:
+                        r, g, b = pixels[x, y][:3]
+                        r = math.pow(r / 255.0, 1 / 2.2) * 255.0
+                        g = math.pow(g / 255.0, 1 / 2.2) * 255.0
+                        b = math.pow(b / 255.0, 1 / 2.2) * 255.0
+                        if img.mode == 'RGB':
+                            pixels[x, y] = (int(r), int(g), int(b))
+                        elif img.mode == 'RGBA':
+                            a = pixels[x, y][3]
+                            pixels[x, y] = (int(r), int(g), int(b), a)
+
+            if img.mode == 'L':
+                img = img.convert('RGB')
+            elif img.mode == 'RGBA':
+                rgb_img = Image.new('RGB', img.size)
+                rgb_img.paste(img, mask=img.split()[3])
+                img = rgb_img
+
+            pixels = list(img.getdata())
+            i_width, i_height = img.size
+
+            if img.mode == 'RGB':
+                total_r, total_g, total_b = 0, 0, 0
+                darkness_index = 1.9
+                for r, g, b in pixels:
+                    total_r += int(r // darkness_index)
+                    total_g += int(g // darkness_index)
+                    total_b += int(b // darkness_index)
+                count = i_width * i_height
+                average = (total_r // count, total_g // count, total_b // count)
+            else:
+                total = sum(pixels)
+                average = (total // (i_width * i_height),) * 3
+            card = Image.new('RGB', (width, height), average)
+
+        else:
+            card = Image.new('RGB', (width, height), background_color)
+
+        thumbnail = thumbnail.resize((450, 450))
+        mask = Image.new('L', thumbnail.size, 0)
+        draw = ImageDraw.Draw(mask)
+        draw.rounded_rectangle((0, 0, *thumbnail.size), 30, fill=255)
+        thumbnail = thumbnail.copy()
+        thumbnail.putalpha(mask)
+        card.paste(thumbnail, (75, 75), thumbnail)
+        draw = ImageDraw.Draw(card)
+        local_font_family = None
+
+        if re.findall(r"[А-Яа-яЁё]", track.title) and font_family == "Circular":
+            local_font_family = "Onest"
+
+        title_font_file = File(temp_dir, f"{local_font_family if local_font_family else font_family}-Bold.ttf")
+        title_font = ImageFont.truetype(title_font_file.getAbsolutePath(), 60)
+
+        x, y = 590, 85
+        artists_plus_y = 0
+        lines = textwrap.wrap(track.title, width=21)
+
+        if len(lines) > 1:
+            lines[1] = lines[1] + "..." if len(lines) > 2 else lines[1]
+            artists_plus_y = 70
+        else:
+            pass
+
+        lines = lines[:2]
+
+        for line in lines:
+            draw.text((x, y), line, font=title_font, fill=title_text_color)
+            y += 70
+
+        local_font_family = None
+
+        if re.findall(r"[А-Яа-яЁё]", "".join(track.title)) and font_family == "Circular":
+            local_font_family = "Onest"
+
+        artist_font_file = File(temp_dir, f"{local_font_family if local_font_family else font_family}-Regular.ttf")
+        artist_font = ImageFont.truetype(artist_font_file.getAbsolutePath(), 40)
+        artists = textwrap.wrap(" • ".join(track.artist), width=32)
+        if len(artists) > 1:
+            if "•" in artists[0][-2:]:
+                artists[0] = artists[0][:artists[0].rfind("•") - 1]
+            artists[0] = artists[0]
+        artists = artists[0]
+
+        draw.text((590, 170 + artists_plus_y), artists, subtext_color, font=artist_font)
+        if not (self.get_setting("fast_card_render", False)):
+            progress_bar_empty = Image.new('RGBA', (width - 665, 10), (0, 0, 0, 0))
+
+            progress_draw = ImageDraw.Draw(progress_bar_empty)
+            progress_draw.rounded_rectangle(
+                xy = (0, 0, *progress_bar_empty.size),
+                radius = 7,
+                fill=subtext_color
+            )
+            progress_draw.rounded_rectangle(
+                xy = (0, 0, progress_bar_empty.width * (track.progress / track.duration), 10),
+                radius = 7,
+                fill=title_text_color
+            )
+            card.paste(progress_bar_empty, (590, 460), progress_bar_empty)
+
+            timers_font_path = File(temp_dir, f"{font_family}-Regular.ttf").getAbsolutePath()
+            timers_font = ImageFont.truetype(timers_font_path, 30)
+
+            draw.text(
+                xy = (590, 490),
+                text = f"{datetime.datetime.fromtimestamp(track.progress).strftime('%M:%S')}",
+                fill = subtext_color,
+                font=timers_font,
+                anchor="la"
+            )
+            draw.text(
+                xy = (1365, 490),
+                text = f"{datetime.datetime.fromtimestamp(track.duration).strftime('%M:%S')}",
+                fill = subtext_color,
+                font=timers_font,
+                anchor="ra"
+            )
+        else:
+            local_font_family = None
+
+            if advanced_mode:
+                subtext = self.get_setting("instant_subtext", "powered by")
+                maintext = self.get_setting("instant_main_text", __name__)
+            else:
+                subtext = "powered by"
+                maintext = __name__
+
+            subtext = subtext[:26] + "..." if len(subtext) > 26 else subtext
+            maintext = maintext[:21] + "..." if len(maintext) > 21 else maintext
+
+            ru_flag_subtext = True if re.findall(r"[А-Яа-яЁё]", subtext) else False
+            ru_flag_maintext = True if re.findall(r"[А-Яа-яЁё]", maintext) else False
+
+            if ru_flag_subtext and font_family == "Circular":
+                local_font_family = "Onest"
+
+            info_font_file = File(temp_dir, f"{local_font_family if local_font_family else font_family}-Regular.ttf")
+            info_font = ImageFont.truetype(info_font_file.getAbsolutePath(), 42)
+            local_font_family = None
+
+            if ru_flag_maintext and font_family == "Circular":
+                local_font_family = "Onest"
+
+            device_font_file = File(temp_dir, f"{local_font_family if local_font_family else font_family}-Bold.ttf")
+            device_font = ImageFont.truetype(device_font_file.getAbsolutePath(), 52)
+
+            draw.text((590, 415), subtext, subtext_color, font=info_font, anchor="ls")
+            draw.text((590, 485), maintext, title_text_color, font=device_font, anchor="ls")
+
+        filename = f"now_{__name__}.png"
+        temp_photo_path = File(temp_dir, filename).getAbsolutePath()
+        card.save(temp_photo_path)
+
+        return temp_photo_path
+
+    def is_hex_valid(self, new: str, variable_name: str):
+        if not re.match("^#[A-Fa-f0-9]{6}$", new):
+            run_on_ui_thread(lambda: self.show_info_alert(title=locale.Alert_HEX_Title, message=locale.Alert_HEX_Text))
+            self.set_setting(variable_name, DEFAULT_COLOR[variable_name])
+
+    def check_resources(self, redownload_resources: bool, show_success: bool):
         try:
             temp = _get_temp_dir()
             if not temp:
                 logcat("Temp directory is none.")
                 return
 
-            files = list(temp.listFiles())
+            existing_files = {f.getName() for f in temp.listFiles()}
 
-            if len(files) != len(RESOURCES):
-                for f in files:
-                    if f.delete():
-                        logcat(f"Deleted {f.getName()}.")
-                    else:
-                        logcat(f"Delete failed {f.getName()}.")
+            all_resources_exist = True
+            for resource_name in RESOURCES:
+                if resource_name not in existing_files:
+                    logcat(f"Resource missing: {resource_name}")
+                    all_resources_exist = False
+                    break
 
-                self.download_resources()
-                return
+            if all_resources_exist:
+                if show_success:
+                    self.show_info_alert(title=locale.SourceSuccess_Title, message=locale.SourceSuccess_Text)
+                else:
+                    logcat("All resources founded.")
+            else:
+                if redownload_resources:
+                    logcat("Some resources are missing. Clearing directory and re-downloading.")
+                    for f in temp.listFiles():
+                        if f.isFile():
+                            f.delete()
+
+                    self.download_resources()
 
         except Exception as e:
             logcat(f"check_resources error: {e}")
