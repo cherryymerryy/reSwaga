@@ -265,7 +265,7 @@ class LocaleController:
         Alert_HEX_Title = "⚠️ Ошибка HEX"
         Alert_HEX_Text = "Недопустимый HEX-код цвета"
         
-        Message_CaptionLink_Text = "[Yandex]({0})"
+        Message_CaptionLink_Text = "[Track]({0})"
         Message_CaptionSongLink_Text = "[song.link]({0})"
         Message_CaptionDivider = " • "
 
@@ -364,7 +364,7 @@ class LocaleController:
         Alert_HEX_Title = "⚠️ HEX Error"
         Alert_HEX_Text = "Invalid HEX color code"
         
-        Message_CaptionLink_Text = "[Yandex]({0})"
+        Message_CaptionLink_Text = "[Track]({0})"
         Message_CaptionSongLink_Text = "[song.link]({0})"
         Message_CaptionDivider = " • "
 
@@ -487,8 +487,17 @@ class Spotify(BasePlatform):
             data = data.json()['items']
             if data:
                 try:
-                    album_id = data[0]['externalIds']['spotify'][0]
-                    return f"https://open.spotify.com/album/{album_id}"
+                    if data[0]['externalIds']['spotify'][0]:
+                        album_id = data[0]['externalIds']['spotify'][0]
+                        return f"https://open.spotify.com/album/{album_id}"
+
+                    elif data[0]['externalIds']['appleMusic'][0]:
+                        album_id = data[0]['externalIds']['appleMusic'][0]
+                        return f"https://open.spotify.com/album/{album_id}"
+
+                    else:
+                        album_id = data[0]['externalIds']['id']
+                        return f"https://open.spotify.com/album/{album_id}"
                 except Exception as e:
                     logcat("[Spotify] get_album_link: " + str(e))
                     return None
@@ -636,7 +645,7 @@ class ReSwagaPlugin(BasePlugin):
             Selector(
                 key="selected_platform",
                 text=locale.Settings_Auth_Platform,
-                items=[locale.Settings_Auth_Value_NotSelected_Text, "Spotify", "Yandex.Music", "SoundCloud"],
+                items=[locale.Settings_Auth_Value_NotSelected_Text, "Spotify", "Yandex.Music"],
                 default=0,
                 on_change=lambda new_value: self.update_platform_object(new_value, False)
             )
@@ -933,13 +942,11 @@ class ReSwagaPlugin(BasePlugin):
                 track = self.platform.get_track()
 
             if track is None:
-                logcat("not t")
                 run_on_ui_thread(lambda: self.dismiss_spinner())
                 show_error(locale.Track_Not_Active)
                 return
 
             if not track.active:
-                logcat("not ta")
                 run_on_ui_thread(lambda: self.dismiss_spinner())
                 show_error(locale.Track_Not_Active)
                 return
@@ -952,7 +959,6 @@ class ReSwagaPlugin(BasePlugin):
                 temp_file_path = File(temp_dir, f"now_{__name__}.png").getAbsolutePath()
 
             if temp_file_path in ["", None]:
-                logcat("not tfp")
                 run_on_ui_thread(lambda: self.dismiss_spinner())
                 show_error(locale.Track_Not_Active)
                 return
@@ -960,7 +966,6 @@ class ReSwagaPlugin(BasePlugin):
             generated_photo = get_send_messages_helper().generatePhotoSizes(temp_file_path, None)
 
             if generated_photo is None:
-                logcat("not gp")
                 run_on_ui_thread(lambda: self.dismiss_spinner())
                 show_error(locale.Track_Not_Active)
                 return
@@ -971,7 +976,6 @@ class ReSwagaPlugin(BasePlugin):
             params["replyToTopMsg"] = msg_params.replyToTopMsg
 
             if not track.active:
-                logcat("not t2")
                 show_error(locale.Track_Not_Active)
                 run_on_ui_thread(lambda: self.dismiss_spinner())
                 return
