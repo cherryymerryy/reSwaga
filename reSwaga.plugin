@@ -6,17 +6,19 @@ import random
 import textwrap
 import threading
 import time
+from secrets import choice
+
 import requests
 import re
 
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 
 from enum import Enum
-from typing import Optional, Any, Callable
+from typing import Optional, Any, Callable, List, Dict
 
 from PIL.Image import Resampling
 from android_utils import log, run_on_ui_thread
-from base_plugin import BasePlugin, HookResult, HookStrategy
+from base_plugin import BasePlugin, HookResult, HookStrategy, AppEvent
 from client_utils import get_last_fragment, get_user_config, get_send_messages_helper, send_message, \
     get_messages_controller, send_request, get_messages_storage, get_account_instance
 from markdown_utils import parse_markdown
@@ -195,7 +197,7 @@ class LocaleController:
         Settings_Auth_Value_NotSelected_Text = "—"
         Settings_Auth_Value_Spotify_Text = "Юзернейм"
         Settings_Auth_Value_YandexMusic_Text = "Токен"
-        Settings_Auth_Value_SoundCloud_Text = "???"
+        Settings_Auth_Value_SoundCloud_Text = "Токен"
 
         Settings_CardSettings_Header = "Внешний вид"
 
@@ -242,6 +244,7 @@ class LocaleController:
         Setting_Stream_Title = "Настройки стрима"
         Settings_Stream_Text = "Стрим трека в профиль"
         Settings_Stream_Subtext = "Обновляет био/локацию текущим треком"
+        Settings_Stream_Alert = "Рекомендуем вам сначала настроить трансляцию трека, а уже после этого активировать функцию."
 
         Settings_StreamAlert_Title = "⚠️⚠️ВНИМАНИЕ⚠️⚠️"
         Settings_StreamAlert_Text = "Эта функция может работать нестабильно из-за ограничений Telegram на частую смену профиля. Ваши данные могут обновляться с задержкой. Используйте на свой страх и риск."
@@ -294,7 +297,7 @@ class LocaleController:
         Settings_Auth_Value_NotSelected_Text = "—"
         Settings_Auth_Value_Spotify_Text = "Username"
         Settings_Auth_Value_YandexMusic_Text = "Token"
-        Settings_Auth_Value_SoundCloud_Text = "???"
+        Settings_Auth_Value_SoundCloud_Text = "Token"
 
         Settings_CardSettings_Header = "Customization"
 
@@ -341,6 +344,7 @@ class LocaleController:
         Setting_Stream_Title = "Stream settings"
         Settings_Stream_Text = "Stream track to profile"
         Settings_Stream_Subtext = "Updates your bio/location with the currently playing track"
+        Settings_Stream_Alert = "We recommend that you first set up the broadcast of the track, and only after that activate the function."
 
         Settings_StreamAlert_Title = "⚠️⚠️WARNING⚠️⚠️"
         Settings_StreamAlert_Text = "This feature may work inconsistently due to Telegram's profile change limits. As a result, your profile information may not update immediately. Use at your own risk."
@@ -561,11 +565,108 @@ class YandexMusic(BasePlatform):
 class SoundCloud(BasePlatform):
     def __init__(self, value: str):
         super().__init__(value)
-        self.api_url: str = ""
-        self.token = value.strip()
+        if not value: return
+
+        self.token: str = value.strip()
+
+        chrome_user_agents = [
+            'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/535.1 (KHTML, like Gecko) Chrome/13.0.782.112 Safari/535.1',
+            'Mozilla/5.0 (Windows NT 6.0) AppleWebKit/535.1 (KHTML, like Gecko) Chrome/13.0.782.112 Safari/535.1',
+            'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.31 (KHTML, like Gecko) Chrome/26.0.1410.64 Safari/537.31',
+            'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/27.0.1453.116 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/27.0.1453.110 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/31.0.1650.63 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.31 (KHTML, like Gecko) Chrome/26.0.1410.64 Safari/537.31',
+            'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.101 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.31 (KHTML, like Gecko) Chrome/26.0.1410.64 Safari/537.31',
+            'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.1 (KHTML, like Gecko) Chrome/21.0.1180.89 Safari/537.1',
+            'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.1 (KHTML, like Gecko) Chrome/21.0.1180.89 Safari/537.1',
+            'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/535.1 (KHTML, like Gecko) Chrome/14.0.835.163 Safari/535.1',
+            'Mozilla/5.0 (Windows; U; Windows NT 6.1; en-US) AppleWebKit/532.0 (KHTML, like Gecko) Chrome/3.0.195.27 Safari/532.0',
+            'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/535.1 (KHTML, like Gecko) Chrome/14.0.835.186 Safari/535.1',
+            'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US) AppleWebKit/532.0 (KHTML, like Gecko) Chrome/3.0.195.38 Safari/532.0',
+            'Mozilla/5.0 (Windows; U; Windows NT 6.1; en-US) AppleWebKit/532.2 (KHTML, like Gecko) Chrome/4.0.221.7 Safari/532.2',
+            'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US) AppleWebKit/525.13 (KHTML, like Gecko) Chrome/0.2.149.29 Safari/525.13',
+            'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US) AppleWebKit/525.13 (KHTML, like Gecko) Chrome/0.2.149.27 Safari/525.13',
+        ]
+
+        self.headers: Dict[str, str] = {
+            'User-Agent': choice(chrome_user_agents),
+            'Authorization': f'OAuth {self.token}',
+            'Origin': 'https://soundcloud.com',
+            'Referer': 'https://soundcloud.com/',
+        }
+        self.params: Dict[str, str] = {
+            'client_id': '1HxML01xkzWgtHfBreaeZfpANMe3ADjb',
+            'app_version': '1739181955',
+            'app_locale': 'en',
+            'limit': '20',
+            'offset': '0',
+            'linked_partitioning': '1'
+        }
+        self.api_url: str = 'https://api-v2.soundcloud.com/'
 
     def get_track(self) -> Optional[Track]:
-        return Track(active=False)
+        if not self.token:
+            self.now_track = Track(active=False)
+            return Track(active=False)
+
+        try:
+            data = requests.get(f"{self.api_url}me/play-history/tracks", params=self.params, headers=self.headers)
+
+            if data.status_code != 200:
+                logcat(f"[Soundcloud] Status code: {data.status_code}")
+                self.now_track = Track(active=False)
+                return Track(active=False)
+
+            collection = data.json()['collection']
+
+            if not collection or len(collection) <= 0:
+                logcat("[Soundcloud] Collection is empty")
+                self.now_track = Track(active=False)
+                return Track(active=False)
+
+            track_id: int = collection[0].get('track_id', 0)
+            t: Dict[str, Any] = collection[0].get('track', None)
+
+            if not t:
+                logcat("[Soundcloud] TrackInfo is None")
+                self.now_track = Track(active=False)
+                return Track(active=False)
+
+            metadata: Optional[Dict[str, Any]] = t.get('publisher_metadata', None)
+            if not metadata:
+                logcat("[Soundcloud] Metadata is None")
+                self.now_track = Track(active=False)
+                return Track(active=False)
+
+            raw_artist: str = metadata.get('artist', '')
+            if isinstance(raw_artist, str):
+                artists = [x.strip() for x in raw_artist.split(',') if x.strip()]
+            elif isinstance(raw_artist, list):
+                artists = raw_artist
+            else:
+                artists = []
+
+            track = Track(
+                active=True,
+                track_id=track_id,
+                title=t.get('title', 'No title provided'),
+                artist=artists,
+                album=metadata.get('album_title', ''),
+                thumb=t.get('artwork_url', ''),
+                duration=int(t.get('duration', 0)) // 1000,
+                link=t.get('permalink_url', '')
+            )
+
+            self.now_track = track
+            logcat(f"[Soundcloud] built track: {track.title} — {track.artist}")
+            return track
+
+        except Exception as e:
+            logcat(f"[Soundcloud] Exception in get_track: {e}")
+            self.now_track = Track(active=False)
+            return Track(active=False)
 
 
 def get_platform(platform: int) -> Platform:
@@ -629,6 +730,9 @@ class ReSwagaPlugin(BasePlugin):
         if self.poller_enabled:
             self.start_poller()
 
+        if self.get_setting("default_stream_text", DEFAULT_STREAM_TEXT) == DEFAULT_STREAM_TEXT:
+            self.save_default_user_bio()
+
         logcat(f"Plugin loaded.")
 
     def on_plugin_unload(self):
@@ -645,7 +749,7 @@ class ReSwagaPlugin(BasePlugin):
             Selector(
                 key="selected_platform",
                 text=locale.Settings_Auth_Platform,
-                items=[locale.Settings_Auth_Value_NotSelected_Text, "Spotify", "Yandex.Music"],
+                items=[locale.Settings_Auth_Value_NotSelected_Text, "Spotify", "Yandex.Music", "SoundCloud"],
                 default=0,
                 on_change=lambda new_value: self.update_platform_object(new_value, False)
             )
@@ -675,7 +779,6 @@ class ReSwagaPlugin(BasePlugin):
             return settings
 
         advanced = self.get_setting('advanced_mode', False)
-        stream_bio_enabled = self.get_setting("stream_bio_enabled", False)
 
         settings += [
             Divider(),
@@ -757,7 +860,8 @@ class ReSwagaPlugin(BasePlugin):
                 text=locale.Setting_Stream_Title,
                 icon="msg_download_settings",
                 create_sub_fragment=self.create_stream_settings
-            ) if stream_bio_enabled else None,
+            ),
+            Divider(text=locale.Settings_Stream_Alert),
 
             Header(text=locale.Settings_Other_Header),
             Text(
@@ -830,32 +934,32 @@ class ReSwagaPlugin(BasePlugin):
         ]
 
     def create_stream_settings(self):
-        stream_bio_enabled = self.get_setting("stream_bio_enabled", False)
+        stream_places: List[str] = [locale.Setting_TrackStream_Item1]
+        if get_user_config().isPremium():
+            stream_places.append(locale.Setting_TrackStream_Item2)
+
         return [
             Selector(
                 key="stream_place",
                 text=locale.Setting_TrackStream_Text,
                 default=0,
-                items=[
-                    locale.Setting_TrackStream_Item1,
-                    locale.Setting_TrackStream_Item2,
-                ],
+                items=stream_places,
                 icon="menu_premium_location" if self.get_setting("stream_place", 0) else "msg_openprofile"
-            ) if get_user_config().isPremium() and stream_bio_enabled else None,
+            ),
             Input(
                 key="default_stream_text",
                 text=locale.Settings_InStream_Text,
                 default=DEFAULT_STREAM_TEXT,
                 subtext=locale.Settings_InStream_Subtext,
                 icon="msg_photo_text_framed3"
-            ) if stream_bio_enabled else None,
+            ),
             Input(
                 key="track_display_format",
                 text=locale.Settings_FormatInStream_Text,
                 default=DEFAULT_STREAM_STRING,
                 subtext=locale.Settings_FormatInStream_Subtext,
                 icon="msg_view_file"
-            ) if stream_bio_enabled else None,
+            ),
         ]
 
     def on_send_message_hook(self, account: int, params: Any):
@@ -921,10 +1025,24 @@ class ReSwagaPlugin(BasePlugin):
         else:
             return HookResult(strategy=HookStrategy.DEFAULT)
 
+    def on_app_event(self, event_type: AppEvent):
+        stream_bio_enabled: bool = self.get_setting("stream_bio_enabled", False)
+        fast_card_render: bool = self.get_setting("fast_card_render", False)
+
+        if any([stream_bio_enabled, fast_card_render]):
+            if event_type in [AppEvent.PAUSE, AppEvent.STOP]:
+                self.stop_poller()
+            elif event_type in [AppEvent.RESUME, AppEvent.START]:
+                self.start_poller()
+            else:
+                logcat(f"Unknown app event type : {event_type}")
+        else:
+            logcat("No need to enable/disable poller.")
+
     def is_platform_value_valid(self, platform: int) -> bool:
         value = str(self.get_setting("value", DEFAULT_VALUE))
         if platform == int(Platform.YandexMusic.value):
-            return value.startswith("y0__") and not len(value) <= 4 and not value in ["", None, DEFAULT_VALUE]
+            return not len(value) <= 4 and not value in ["", None, DEFAULT_VALUE]
         else:
             return not value in ["", None, DEFAULT_VALUE]
 
@@ -995,13 +1113,16 @@ class ReSwagaPlugin(BasePlugin):
                 if platform_link != 0:
                     caption += locale.Message_CaptionDivider
 
-                sl_platform: str = ""
                 platform = self.get_setting("selected_platform", 0)
 
                 if platform == int(Platform.Spotify.value):
                     sl_platform = 's'
                 elif platform == int(Platform.YandexMusic.value):
                     sl_platform = 'ya'
+                elif platform == int(Platform.SoundCloud.value):
+                    sl_platform = 'sc'
+                else:
+                    sl_platform = 'sc'
 
                 caption += locale.Message_CaptionSongLink_Text.format(
                     f"https://song.link/{sl_platform}/{track.track_id}")
@@ -1016,7 +1137,8 @@ class ReSwagaPlugin(BasePlugin):
             run_on_ui_thread(lambda: send_message(params))
             run_on_ui_thread(lambda: self.dismiss_spinner())
         except Exception as e:
-            logcat(f"send_card_message {e}")
+            import traceback
+            logcat(f"send_card_message {traceback.format_exc()}")
 
     def send_audio_message(self, dialog_id, reply_to_msg, reply_to_top_msg):
         run_on_ui_thread(lambda: self.show_spinner())
@@ -1126,31 +1248,28 @@ class ReSwagaPlugin(BasePlugin):
 
     def is_args_not_valid(self, platform: int) -> bool:
         if platform == int(Platform.NotSelected.value) or self.platform is None:
-            BulletinHelper.show_with_button(
-                locale.Check_Platform_NotSelected,
-                R.raw.error,
-                locale.Check_Platform_NotSelected_Button,
-                on_click=lambda: _open_plugin_settings()
+            show_error(
+                message=locale.Check_Platform_NotSelected,
+                on_click=lambda: _open_plugin_settings(),
+                button_text=locale.Check_Platform_NotSelected_Button
             )
             return True
 
         elif not self.is_platform_value_valid(platform):
-            BulletinHelper.show_with_button(
-                locale.Check_Value_NotValid,
-                R.raw.error,
-                locale.Check_Value_NotValid_Button,
-                on_click=lambda: _open_plugin_settings()
+            show_error(
+                message=locale.Check_Value_NotValid,
+                on_click=lambda: _open_plugin_settings(),
+                button_text=locale.Check_Value_NotValid_Button
             )
             return True
 
-        # elif self.check_resources(True, False):
-        #     BulletinHelper.show_with_button(
-        #         locale.Check_Resources_NotFound,
-        #         R.raw.error,
-        #         locale.Check_Resources_NotFound_Button,
-        #         on_click=lambda: self.download_resources()
-        #     )
-        #     return True
+        elif not self.check_resources(True, False):
+            show_error(
+                message=locale.Check_Resources_NotFound,
+                on_click=lambda: self.download_resources(True),
+                button_text=locale.Check_Resources_NotFound_Button
+            )
+            return True
 
         else:
             return False
@@ -1163,38 +1282,40 @@ class ReSwagaPlugin(BasePlugin):
             else:
                 self.start_poller()
 
+    def save_default_user_bio(self):
+        stream_place = self.get_setting("stream_place", 0)
+        default_stream_text = self.get_setting("default_stream_text", DEFAULT_STREAM_TEXT)
+
+        client_user_id = get_user_config().getClientUserId()
+        if client_user_id is None or client_user_id == 0:
+            logcat("Client userId not found")
+            return
+
+        user_full = get_messages_controller().getUserFull(client_user_id)
+        if user_full is None:
+            logcat("User fullInfo not found")
+            return
+
+        if stream_place == 0:  # current bio
+            if user_full.about and user_full.about != default_stream_text:
+                if not str(user_full.about).startswith("🎵 | "):
+                    self.set_setting("default_stream_text", user_full.about)
+
+        elif stream_place == 1:  # current address
+            if user_full.business_location and user_full.business_location.address and user_full.business_location.address != default_stream_text:
+                if not str(user_full.business_location.address).startswith("🎵 | "):
+                    self.set_setting("default_stream_text", user_full.business_location.address)
+
+        else:  # Index out of range
+            self.set_setting("default_stream_text", DEFAULT_STREAM_TEXT)
+
     def set_stream_bio_enabled(self, enable: bool):
         if enable:
             if not self.poller_enabled:
                 logcat("Poller is disabled, starting...")
                 self.start_poller()
 
-            stream_place = self.get_setting("stream_place", 0)
-            default_stream_text = self.get_setting("default_stream_text", DEFAULT_STREAM_TEXT)
-
-            client_user_id = get_user_config().getClientUserId()
-            if client_user_id is None or client_user_id == 0:
-                logcat("Client userId not found")
-                return
-
-            user_full = get_messages_controller().getUserFull(client_user_id)
-            if user_full is None:
-                logcat("User fullInfo not found")
-                return
-
-            if stream_place == 0:  # current bio
-                if user_full.about and user_full.about != default_stream_text:
-                    if not str(user_full.about).startswith("🎵 | "):
-                        self.set_setting("default_stream_text", user_full.about)
-
-            elif stream_place == 1:  # current address
-                if user_full.business_location and user_full.business_location.address and user_full.business_location.address != default_stream_text:
-                    if not str(user_full.business_location.address).startswith("🎵 | "):
-                        self.set_setting("default_stream_text", user_full.business_location.address)
-
-            else:  # Index out of range
-                self.set_setting("default_stream_text", DEFAULT_STREAM_TEXT)
-
+            self.save_default_user_bio()
             self.set_stream_text(False)
         else:
             self.set_stream_text(True)
@@ -1576,12 +1697,12 @@ class ReSwagaPlugin(BasePlugin):
             run_on_ui_thread(lambda: self.show_info_alert(title=locale.Alert_HEX_Title, message=locale.Alert_HEX_Text))
             self.set_setting(variable_name, DEFAULT_COLOR[variable_name])
 
-    def check_resources(self, redownload_resources: bool, show_success: bool):
+    def check_resources(self, redownload_resources: bool, show_success: bool) -> bool:
         try:
             temp = _get_temp_dir()
             if not temp:
                 logcat("Temp directory is none.")
-                return
+                return False
 
             existing_files = {f.getName() for f in temp.listFiles()}
 
@@ -1597,6 +1718,8 @@ class ReSwagaPlugin(BasePlugin):
                     self.show_info_alert(title=locale.SourceSuccess_Title, message=locale.SourceSuccess_Text)
                 else:
                     logcat("All resources founded.")
+
+                return True
             else:
                 if redownload_resources:
                     logcat("Some resources are missing. Clearing directory and re-downloading.")
@@ -1606,8 +1729,11 @@ class ReSwagaPlugin(BasePlugin):
 
                     threading.Thread(target=self.download_resources, args=(False,), daemon=True).start()
 
+                return False
+
         except Exception as e:
             logcat(f"check_resources error: {e}")
+            return False
 
     def download_resources(self, clear: bool):
         run_on_ui_thread(lambda: self.show_loading_alert("Downloading resources..."))
