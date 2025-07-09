@@ -768,7 +768,7 @@ class ReSwagaPlugin(BasePlugin):
             Text(
                 text=locale.Setting_Other_ForceDownload,
                 icon="msg_download",
-                # on_click=lambda view: self.force_source_downloader()
+                on_click=lambda view: threading.Thread(target=self.download_resources, args=(True,), daemon=True).start()
             ),
             Text(
                 text=locale.Setting_Other_Donate,
@@ -1121,6 +1121,8 @@ class ReSwagaPlugin(BasePlugin):
 
         else:
             logcat(f"Unknown platform ({new_platform})")
+
+        self.set_stream_text(True)
 
     def is_args_not_valid(self, platform: int) -> bool:
         if platform == int(Platform.NotSelected.value) or self.platform is None:
@@ -1602,18 +1604,23 @@ class ReSwagaPlugin(BasePlugin):
                         if f.isFile():
                             f.delete()
 
-                    self.download_resources()
+                    threading.Thread(target=self.download_resources, args=(False,), daemon=True).start()
 
         except Exception as e:
             logcat(f"check_resources error: {e}")
 
-    def download_resources(self):
+    def download_resources(self, clear: bool):
         run_on_ui_thread(lambda: self.show_loading_alert("Downloading resources..."))
 
         temp = _get_temp_dir()
         if not temp:
             logcat("Temp directory is none.")
             return
+
+        if clear:
+            for f in temp.listFiles():
+                if f.isFile():
+                    f.delete()
 
         progress: int = 0
 
