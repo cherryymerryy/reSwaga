@@ -424,6 +424,9 @@ class Platform(Enum):
     Spotify = 1
     YandexMusic = 2
     SoundCloud = 3
+    VkMusic = 4
+    YouTubeMusic = 5
+    Tidal = 6
 
 
 class BasePlatform:
@@ -1227,6 +1230,7 @@ class ReSwagaPlugin(BasePlugin):
             self.set_setting("value", "")
 
         token = self.get_setting("value", None)
+        token_default_values = ["", None, DEFAULT_VALUE]
 
         if new_platform == int(Platform.NotSelected.value):
             self.platform = None
@@ -1244,6 +1248,16 @@ class ReSwagaPlugin(BasePlugin):
             logcat(f"Unknown platform ({new_platform})")
 
         self.set_stream_text(True)
+
+        stream_bio_enabled: bool = self.get_setting('stream_bio_enabled', False)
+        fast_card_render: bool = self.get_setting('fast_card_render', False)
+
+        if token in token_default_values:
+            self.stop_poller()
+        elif not token in token_default_values and any([stream_bio_enabled, fast_card_render]):
+            self.start_poller()
+        else:
+            logcat("Unknown token state, can't do anything")
 
     def is_args_not_valid(self, platform: int) -> bool:
         if platform == int(Platform.NotSelected.value) or self.platform is None:
