@@ -6,17 +6,16 @@ import random
 import textwrap
 import threading
 import time
-from secrets import choice
-
 import requests
 import re
 
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
+from PIL.Image import Resampling
 
 from enum import Enum
 from typing import Optional, Any, Callable, List, Dict
+from secrets import choice
 
-from PIL.Image import Resampling
 from android_utils import log, run_on_ui_thread
 from base_plugin import BasePlugin, HookResult, HookStrategy, AppEvent
 from client_utils import get_last_fragment, get_user_config, get_send_messages_helper, send_message, \
@@ -612,7 +611,11 @@ class SoundCloud(BasePlatform):
             return Track(active=False)
 
         try:
-            data = requests.get(f"{self.api_url}me/play-history/tracks", params=self.params, headers=self.headers)
+            data = requests.get(
+                url=f"{self.api_url}me/play-history/tracks",
+                params=self.params,
+                headers=self.headers
+            )
 
             if data.status_code != 200:
                 logcat(f"[Soundcloud] Status code: {data.status_code}")
@@ -666,6 +669,7 @@ class SoundCloud(BasePlatform):
         except Exception as e:
             logcat(f"[Soundcloud] Exception in get_track: {e}")
             self.now_track = Track(active=False)
+            show_info(str(e))
             return Track(active=False)
 
 
@@ -1061,12 +1065,10 @@ class ReSwagaPlugin(BasePlugin):
 
             if track is None:
                 run_on_ui_thread(lambda: self.dismiss_spinner())
-                show_error(locale.Track_Not_Active)
                 return
 
             if not track.active:
                 run_on_ui_thread(lambda: self.dismiss_spinner())
-                show_error(locale.Track_Not_Active)
                 return
 
             temp_dir = _get_temp_dir()
@@ -1078,14 +1080,12 @@ class ReSwagaPlugin(BasePlugin):
 
             if temp_file_path in ["", None]:
                 run_on_ui_thread(lambda: self.dismiss_spinner())
-                show_error(locale.Track_Not_Active)
                 return
 
             generated_photo = get_send_messages_helper().generatePhotoSizes(temp_file_path, None)
 
             if generated_photo is None:
                 run_on_ui_thread(lambda: self.dismiss_spinner())
-                show_error(locale.Track_Not_Active)
                 return
 
             params["photo"] = generated_photo
@@ -1094,7 +1094,6 @@ class ReSwagaPlugin(BasePlugin):
             params["replyToTopMsg"] = msg_params.replyToTopMsg
 
             if not track.active:
-                show_error(locale.Track_Not_Active)
                 run_on_ui_thread(lambda: self.dismiss_spinner())
                 return
 
@@ -1138,7 +1137,7 @@ class ReSwagaPlugin(BasePlugin):
             run_on_ui_thread(lambda: self.dismiss_spinner())
         except Exception as e:
             import traceback
-            logcat(f"send_card_message {traceback.format_exc()}")
+            logcat(f"send_card_message: {e}\n\nFull traceback: {traceback.format_exc()}")
 
     def send_audio_message(self, dialog_id, reply_to_msg, reply_to_top_msg):
         run_on_ui_thread(lambda: self.show_spinner())
@@ -1621,7 +1620,7 @@ class ReSwagaPlugin(BasePlugin):
         artists = artists[0]
 
         draw.text((590, 170 + artists_plus_y), artists, subtext_color, font=artist_font)
-        if not (self.get_setting("fast_card_render", False)):
+        if not (self.get_setting("fast_card_render", False)) and track.progress:
             progress_bar_empty = Image.new('RGBA', (width - 665, 10), (0, 0, 0, 0))
 
             progress_draw = ImageDraw.Draw(progress_bar_empty)
