@@ -453,17 +453,26 @@ class BasePlatform:
     def __init__(self, value: str):
         self.now_track: Optional[Track] = None
 
-        if value:
+        if value or self.value != "":
             self.value: str = value
         else:
             logcat("Value is none.")
 
         self.memory_id: int = 0
         self.value_text: Optional[str] = None
-        self.additional_settings: Optional[List[Text, Divider, Header, Switch, Selector, Input]] = None
+        self.additional_settings: Optional[bool] = None
 
     def get_track(self) -> Optional[Track]:
         pass
+
+    def create_additional_settings(self, plugin) -> List[Any]:
+        if self.additional_settings is False:
+            logcat("To enable additional settings, you need to enable it in the platform class.")
+            return []
+        
+        if plugin is None or not isinstance(plugin, ReSwagaPlugin):
+            logcat("Additional settings must have valid ReSwagaPlugin instance.")
+            return []
 
 
 class Spotify(BasePlatform):
@@ -537,14 +546,15 @@ class Spotify(BasePlatform):
 class YandexMusic(BasePlatform):
     def __init__(self, value: str):
         super().__init__(value)
-        self.value_text = locale.Settings_Auth_Value_YandexMusic_Text
-        self.additional_settings = [
-            Header("Guide"),
-            Text("Authentication guide")
-        ]
-        self.api_url: str = "https://track.mipoh.ru"
         self.token = value.strip()
-        self.headers = {"User-Agent": "Mozilla/5.0", "Accept": "application/json", "ya-token": self.token}
+        self.value_text = locale.Settings_Auth_Value_YandexMusic_Text
+        self.additional_settings = True
+        self.api_url: str = "https://track.mipoh.ru"
+        self.headers = {
+            "User-Agent": "Mozilla/5.0", 
+            "Accept": "application/json", 
+            "ya-token": self.token
+        }
 
     def get_track(self) -> Optional[Track]:
         if not self.token:
@@ -590,6 +600,21 @@ class YandexMusic(BasePlatform):
             logcat(f"[YandexMusic] get_current_track exception: {e}")
             self.now_track = Track(active=False)
             return Track(active=False)
+
+    def create_additional_settings(self, plugin: BasePlugin):
+        super().create_additional_settings(plugin)
+        return [
+            Header("Authorization guide"),
+            Text(
+                text="test",
+                on_click=lambda zv: plugin.show_spinner()
+            ),
+            Switch(
+                key="test_swaga",
+                default=False,
+                text="testswag"
+            )
+        ]
 
 
 class SoundCloud(BasePlatform):
@@ -821,9 +846,11 @@ class ReSwagaPlugin(BasePlugin):
 
         advanced = self.get_setting('advanced_mode', False)
 
-        if not self.platform.additional_settings is None:
-            settings += [ Divider() ]
-            settings += self.platform.additional_settings
+        if self.platform.additional_settings:
+            additional_settings = self.platform.create_additional_settings(self)
+            if len(additional_settings) > 0:
+                settings += [ Divider() ]
+                settings += additional_settings
 
         settings += [
             Divider(),
