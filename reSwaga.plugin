@@ -37,14 +37,14 @@ from org.telegram.messenger import ApplicationLoader, R, AndroidUtilities, SendM
 
 __id__ = "reswag"
 __name__ = "reSwaga"
-__description__ = "Плагин для отправки карточки текущего трека для сервисов Spotify и Я.Музыка"
+__description__ = "Плагин для отправки карточки/аудио файла текущего трека для музыкальных сервисов."
 __icon__ = "remusic/0"
 __version__ = "1.0.1"
 __author__ = "@meeowPlugins"
 __min_version__ = "11.12.1"
 
-RESOURCE_DIR_NAME = "resources"
-RESOURCES = [
+RESOURCE_DIR_NAME: str = "resources"
+RESOURCES: List[str] = [
     "Onest-Regular.ttf",
     "Onest-Bold.ttf",
     "Onest.ttf",
@@ -53,29 +53,32 @@ RESOURCES = [
     "Circular-Regular.ttf",
     "Circular-Bold.ttf"
 ]
-DOWNLOAD_URL = "https://raw.githubusercontent.com/cherryymerryy/reSwaga/main/"
+DOWNLOAD_URL: str = "https://raw.githubusercontent.com/cherryymerryy/reSwaga/main/"
 
-REMOTE_CONFIG_URL = DOWNLOAD_URL + "config.json"
-REMOTE_CONFIG = {}
+REMOTE_CONFIG_URL: str = DOWNLOAD_URL + "config.json"
+REMOTE_CONFIG: Dict[str, Any] = {}
 
-FONTS = {
+FONTS: Dict[int, str] = {
     0: "Onest",
     1: "Circular",
     2: "NotoSansJP"
 }
 
-DEFAULT_STREAM_STRING = "🎵 | {title} — {artists}"
-DEFAULT_VALUE = "platform value"
-DEFAULT_STREAM_TEXT = "🤙"
-DEFAULT_INSTANT_SUBTEXT = "Powered by"
-DEFAULT_INSTANT_MAIN_TEXT = __name__
-DEFAULT_COLOR = {
+PLATFORMS_COUNT: int = 7
+
+DEFAULT_STREAM_STRING: str = "🎵 | {title} — {artists}"
+DEFAULT_VALUE: str = "platform value"
+DEFAULT_STREAM_TEXT: str = "🤙"
+DEFAULT_INSTANT_SUBTEXT: str = "Powered by"
+DEFAULT_INSTANT_MAIN_TEXT: str = __name__
+DEFAULT_COLOR: Dict[str, str] = {
     "background_color": "#000000",
     "title_text_color": "#FFFFFF",
     "subtext_color": "#A0A0A0"
 }
 
-def logcat(message):
+
+def logcat(message: Any):
     log(f"[{__id__}] {message}")
 
 
@@ -97,7 +100,16 @@ def show_info(message: str, on_click: Optional[Callable] = None, button_text: st
         BulletinHelper.show_error(f"[{__name__}] {message}")
 
 
-def _get_temp_dir() -> Optional[File]:
+def show_success(message: str, on_click: Optional[Callable] = None, button_text: str = ""):
+    if on_click is None:
+        BulletinHelper.show_success(f"[{__name__}] {message}")
+    elif on_click is not None and button_text != "":
+        BulletinHelper.show_with_button(f"[{__name__}] {message}", R.raw.success, button_text, lambda: on_click())
+    else:
+        BulletinHelper.show_success(f"[{__name__}] {message}")
+
+
+def get_temp_dir() -> Optional[File]:
     try:
         base_dir = ApplicationLoader.getFilesDirFixed()
         if not base_dir:
@@ -164,7 +176,7 @@ def download_file(url: str, file_path: str):
         logcat(f"An unexpected error occurred while downloading {name}: {e}")
 
 
-def _open_plugin_settings():
+def open_plugin_settings():
     try:
         java_plugin = PluginsController.getInstance().plugins.get(__id__)
         if java_plugin:
@@ -262,6 +274,7 @@ class LocaleController:
 
         Setting_Other_SourceCheck = "Проверка целостности файлов"
         Setting_Other_ForceDownload = "Скачать все ресурсы заново"
+        Setting_Other_DeleteCached = "Очистить кэшированные данные авторизации"
         Setting_Other_Donate = "Поддержать разработку"
 
         Alert_HEX_Title = "⚠️ Ошибка HEX"
@@ -277,6 +290,9 @@ class LocaleController:
         Check_Value_NotValid_Button = "Изменить"
         Check_Platform_NotSelected_Button = "Выбрать"
         Check_Resources_NotFound_Button = "Скачать"
+
+        CachedAuthData_Clear_Success = "Кэшированные данные авторизации удалены."
+        CachedAuthData_Clear_Error = "Произошла ошибка во время удаления кэшированных данных."
 
         SourceSuccess_Title = "Успешно"
         SourceSuccess_Text = "Ошибок при проверке ресурсов не найдено"
@@ -362,6 +378,7 @@ class LocaleController:
 
         Setting_Other_SourceCheck = "File Integrity Check"
         Setting_Other_ForceDownload = "Download Full Resource Package"
+        Setting_Other_DeleteCached = "Delete cached authentication data"
         Setting_Other_Donate = "Support Development"
 
         Alert_HEX_Title = "⚠️ HEX Error"
@@ -377,6 +394,9 @@ class LocaleController:
         Check_Value_NotValid_Button = "Change"
         Check_Platform_NotSelected_Button = "Select"
         Check_Resources_NotFound_Button = "Download"
+
+        CachedAuthData_Clear_Success = "Cached authorization data removed."
+        CachedAuthData_Clear_Error = "Something went wrong, cached data not removed."
 
         SourceSuccess_Title = "Success"
         SourceSuccess_Text = "No issues detected during resource check"
@@ -439,6 +459,8 @@ class BasePlatform:
             logcat("Value is none.")
 
         self.memory_id: int = 0
+        self.value_text: Optional[str] = None
+        self.additional_settings: Optional[List[Text, Divider, Header, Switch, Selector, Input]] = None
 
     def get_track(self) -> Optional[Track]:
         pass
@@ -447,6 +469,7 @@ class BasePlatform:
 class Spotify(BasePlatform):
     def __init__(self, value: str):
         super().__init__(value)
+        self.value_text = locale.Settings_Auth_Value_Spotify_Text
         username = value.strip() if value else ""
         if '/' in username:
             username = username.split('/')[-1]
@@ -514,6 +537,11 @@ class Spotify(BasePlatform):
 class YandexMusic(BasePlatform):
     def __init__(self, value: str):
         super().__init__(value)
+        self.value_text = locale.Settings_Auth_Value_YandexMusic_Text
+        self.additional_settings = [
+            Header("Guide"),
+            Text("Authentication guide")
+        ]
         self.api_url: str = "https://track.mipoh.ru"
         self.token = value.strip()
         self.headers = {"User-Agent": "Mozilla/5.0", "Accept": "application/json", "ya-token": self.token}
@@ -567,8 +595,9 @@ class YandexMusic(BasePlatform):
 class SoundCloud(BasePlatform):
     def __init__(self, value: str):
         super().__init__(value)
-        if not value: return
+        self.value_text = locale.Settings_Auth_Value_SoundCloud_Text
 
+        if not value: return
         self.token: str = value.strip()
 
         chrome_user_agents = [
@@ -689,12 +718,11 @@ def get_platform(platform: int) -> Platform:
         return Platform.NotSelected
 
 
-def copy(to_copy: Any):
-    if AndroidUtilities.addToClipboard(to_copy):
-        BulletinHelper.show_copied_to_clipboard()
+def copy(to_copy: str) -> bool:
+    return AndroidUtilities.addToClipboard(to_copy)
 
 
-def _delete_file_delayed(path, delay=60):
+def delete_file_delayed(path, delay=60):
     def action():
         try:
             time.sleep(delay)
@@ -712,39 +740,54 @@ class ReSwagaPlugin(BasePlugin):
         super().__init__()
 
         if not self.enabled:
-            logcat("Plugin initializing canceled, because plugin disabled.")
+            logcat("Plugin initialization canceled, because plugin disabled.")
             return
 
         self.platform: Optional[BasePlatform] = None
         self.spinner: Optional[AlertDialogBuilder] = None
         self.info: Optional[AlertDialogBuilder] = None
         self.loading: Optional[AlertDialogBuilder] = None
-        self.poller_enabled: bool = False
+        self.poller_enabled: bool = None
 
     def on_plugin_load(self):
-        if not self.enabled:
-            logcat("Plugin load canceled, because plugin disabled.")
-            return
-
         self.add_on_send_message_hook()
-        _get_temp_dir()
+        get_temp_dir()
+        
         threading.Thread(target=self.check_resources, args=(False,)).start()
-        threading.Thread(target=read_remote_config, daemon=True).start()
+        # threading.Thread(target=read_remote_config, daemon=True).start()
 
-        self.update_platform_object(self.get_setting("selected_platform", 0), True)
+        self.poller_enabled = any([
+            self.get_setting("stream_bio_enabled", False), 
+            self.get_setting("fast_card_render", False)
+        ])
 
-        self.poller_enabled = any([self.get_setting("stream_bio_enabled", False), self.get_setting("fast_card_render", False)])
-        if self.poller_enabled:
+        if self.poller_enabled and self.enabled:
             self.start_poller()
 
         if self.get_setting("default_stream_text", DEFAULT_STREAM_TEXT) == DEFAULT_STREAM_TEXT:
             self.save_default_user_bio()
+
+        current_platform = self.get_setting("selected_platform", 0)
+        
+        if current_platform != int(Platform.NotSelected.value):
+            self.update_platform_object(current_platform, True)
+
+        if not self.is_cached_values_exist():
+            self.initialize_cached_platforms_values()
+        else:
+            if current_platform != int(Platform.NotSelected.value):
+                cached_value = self.get_cached_value(current_platform)
+                current_value = self.get_setting("value", DEFAULT_VALUE)
+
+                if cached_value != current_value:
+                    self.save_platform_value(current_platform, current_value)
 
         logcat(f"Plugin loaded.")
 
     def on_plugin_unload(self):
         if self.poller_enabled:
             self.stop_poller()
+
         logcat(f"Plugin unloaded.")
 
     def create_settings(self):
@@ -765,19 +808,10 @@ class ReSwagaPlugin(BasePlugin):
         if selected_platform == int(Platform.NotSelected.value):
             return settings
 
-        if selected_platform == int(Platform.Spotify.value):
-            value_text = locale.Settings_Auth_Value_Spotify_Text
-        elif selected_platform == int(Platform.YandexMusic.value):
-            value_text = locale.Settings_Auth_Value_YandexMusic_Text
-        elif selected_platform == int(Platform.SoundCloud.value):
-            value_text = locale.Settings_Auth_Value_SoundCloud_Text
-        else:
-            value_text = locale.Settings_Auth_Value_NotSelected_Text
-
         settings += [
             Input(
                 key="value",
-                text=value_text,
+                text=locale.Settings_Auth_Value_Text if self.platform.value_text is None else self.platform.value_text,
                 on_change=lambda z: self.update_platform_object(self.get_setting("selected_platform", 0), True)
             ) if selected_platform != int(Platform.NotSelected.value) else None
         ]
@@ -786,6 +820,10 @@ class ReSwagaPlugin(BasePlugin):
             return settings
 
         advanced = self.get_setting('advanced_mode', False)
+
+        if not self.platform.additional_settings is None:
+            settings += [ Divider() ]
+            settings += self.platform.additional_settings
 
         settings += [
             Divider(),
@@ -880,6 +918,11 @@ class ReSwagaPlugin(BasePlugin):
                 text=locale.Setting_Other_ForceDownload,
                 icon="msg_download",
                 on_click=lambda view: threading.Thread(target=self.download_resources, args=(True,), daemon=True).start()
+            ),
+            Text(
+                text=locale.Setting_Other_DeleteCached,
+                icon="msg_delete",
+                on_click=lambda zv: self.clear_cached_platforms_values()
             ),
             Text(
                 text=locale.Setting_Other_Donate,
@@ -1053,6 +1096,75 @@ class ReSwagaPlugin(BasePlugin):
         else:
             return not value in ["", None, DEFAULT_VALUE]
 
+    def initialize_cached_platforms_values(self):
+        empty_values = [DEFAULT_VALUE for _ in range(PLATFORMS_COUNT)]
+        self.set_setting("cached_values", json.dumps(empty_values))
+        logcat("Cached values initialized.")
+
+    def clear_cached_platforms_values(self):
+        self.initialize_cached_platforms_values()
+        cached_values = self.get_cached_values()
+        values = [cl for cl in cached_values if cl == DEFAULT_VALUE]
+        show_info(cached_values)
+        if len(values) == PLATFORMS_COUNT:
+            self.save_platform_value(
+                self.get_setting("selected_platform", int(Platform.NotSelected.value)),
+                self.get_setting("value", DEFAULT_VALUE)
+            )
+            show_success(locale.CachedAuthData_Clear_Success)
+        else:
+            show_error(locale.CachedAuthData_Clear_Error)
+
+    def save_platform_value(self, platform: int, value: str):
+        exist_values = self.get_cached_values()
+
+        if exist_values[platform] == value:
+            logcat(f"Value '{value}' at index {platform} is already set.")
+            return
+        
+        exist_values[platform] = value
+        self.set_setting("cached_values", json.dumps(exist_values))
+        logcat(f"Saved value '{value}' at index {platform}.")
+    
+    def is_cached_values_exist(self) -> bool:
+        raw_values = self.get_setting("cached_values", None)
+        if not isinstance(raw_values, str):
+            return False
+        
+        try:
+            values_list = json.loads(raw_values)
+            return isinstance(values_list, list) and len(values_list) == PLATFORMS_COUNT
+        except json.JSONDecodeError:
+            return False
+
+    def is_cached_value_exist(self, platform: int) -> bool:
+        cached_value = self.get_cached_values()[platform]
+        return cached_value is not None and cached_value != DEFAULT_VALUE
+
+    def get_cached_value(self, platform: int) -> Optional[str]:
+        return self.get_cached_values()[platform]
+
+    def get_cached_values(self) -> List[Optional[str]]:
+        raw_values = self.get_setting("cached_values", None)
+        exist_values = None
+
+        if isinstance(raw_values, str):
+            try:
+                exist_values = json.loads(raw_values)
+            except json.JSONDecodeError:
+                logcat("Cached values are corrupted, re-initializing.")
+                exist_values = None
+
+        if not isinstance(exist_values, list) or len(exist_values) != PLATFORMS_COUNT:
+            self.initialize_cached_platforms_values()
+            raw_values = self.get_setting("cached_values", None)
+            if isinstance(raw_values, str):
+                 exist_values = json.loads(raw_values)
+            else:
+                 return [DEFAULT_VALUE for _ in range(PLATFORMS_COUNT)]
+        
+        return exist_values
+
     def send_card_message(self, msg_params):
         try:
             run_on_ui_thread(lambda: self.show_spinner())
@@ -1074,7 +1186,7 @@ class ReSwagaPlugin(BasePlugin):
                 run_on_ui_thread(lambda: self.dismiss_spinner())
                 return
 
-            temp_dir = _get_temp_dir()
+            temp_dir = get_temp_dir()
             temp_file_path = None
 
             answer = self._make_card() if not (self.get_setting("fast_card_render", False)) else True
@@ -1162,7 +1274,7 @@ class ReSwagaPlugin(BasePlugin):
             return
 
         try:
-            temp_dir = _get_temp_dir()
+            temp_dir = get_temp_dir()
             temp_dir_name = "swaga_temp"
 
             ext = os.path.splitext(url)[1] or ".mp3"
@@ -1188,20 +1300,20 @@ class ReSwagaPlugin(BasePlugin):
             account = get_account_instance()
             mime = "audio/mpeg"
             markdown_need = False
-            yandex_link = self.get_setting("platform_link", 1)
+            platform_link = self.get_setting("platform_link", 1)
             songlink = self.get_setting("songlink_link_include", True)
             caption = ""
 
-            if any([yandex_link != 0, songlink]):
+            if any([platform_link != 0, songlink]):
                 markdown_need = True
                 caption = random.choice(["[🎵](5188621441926438751) | ", "[🎶](5188705588925702510) | "])
 
-            if yandex_link and yandex_link != 0:
-                link = track.link if (yandex_link == 1 or track is None) else track.album
+            if platform_link and platform_link != 0:
+                link = track.link if (platform_link == 1 or track is None) else track.album
                 caption += locale.Message_CaptionLink_Text.format(link)
 
             if songlink and songlink != 0:
-                if yandex_link != 0:
+                if platform_link != 0:
                     caption += locale.Message_CaptionDivider
                 caption += locale.Message_CaptionSongLink_Text.format(f"https://song.link/ya/{track.track_id}")
 
@@ -1219,18 +1331,27 @@ class ReSwagaPlugin(BasePlugin):
             )
 
             run_on_ui_thread(lambda: self.dismiss_spinner())
-            _delete_file_delayed(file_path)
-            _delete_file_delayed(ext_path)
+            delete_file_delayed(file_path)
+            delete_file_delayed(ext_path)
         except Exception as e:
             run_on_ui_thread(lambda: self.dismiss_spinner())
             show_error(str(e))
 
     def update_platform_object(self, new_platform: int, value: bool):
         if not value:
-            self.set_setting("value", "")
+            if self.is_cached_value_exist(new_platform):
+                self.set_setting("value", self.get_cached_value(new_platform))
+            else:
+                self.set_setting("value", DEFAULT_VALUE)
 
-        token = self.get_setting("value", None)
+        token = self.get_setting("value", DEFAULT_VALUE)
         token_default_values = ["", None, DEFAULT_VALUE]
+
+        if new_platform != int(Platform.NotSelected.value):
+            if self.is_cached_value_exist(new_platform):
+                cached_value = self.get_cached_value(new_platform)
+                if cached_value != token:
+                    self.save_platform_value(new_platform, token)
 
         if new_platform == int(Platform.NotSelected.value):
             self.platform = None
@@ -1263,7 +1384,7 @@ class ReSwagaPlugin(BasePlugin):
         if platform == int(Platform.NotSelected.value) or self.platform is None:
             show_error(
                 message=locale.Check_Platform_NotSelected,
-                on_click=lambda: _open_plugin_settings(),
+                on_click=lambda: open_plugin_settings(),
                 button_text=locale.Check_Platform_NotSelected_Button
             )
             return True
@@ -1271,7 +1392,7 @@ class ReSwagaPlugin(BasePlugin):
         elif not self.is_platform_value_valid(platform):
             show_error(
                 message=locale.Check_Value_NotValid,
-                on_click=lambda: _open_plugin_settings(),
+                on_click=lambda: open_plugin_settings(),
                 button_text=locale.Check_Value_NotValid_Button
             )
             return True
@@ -1476,7 +1597,7 @@ class ReSwagaPlugin(BasePlugin):
 
     def _make_card(self):
         track = self.platform.now_track
-        temp_dir = _get_temp_dir()
+        temp_dir = get_temp_dir()
         font_family = self.get_setting("font", 0)
         font_family = FONTS[font_family]
         width, height = 1440, 600
@@ -1712,7 +1833,7 @@ class ReSwagaPlugin(BasePlugin):
 
     def check_resources(self, redownload_resources: bool, show_success: bool) -> bool:
         try:
-            temp = _get_temp_dir()
+            temp = get_temp_dir()
             if not temp:
                 logcat("Temp directory is none.")
                 return False
@@ -1751,7 +1872,7 @@ class ReSwagaPlugin(BasePlugin):
     def download_resources(self, clear: bool):
         run_on_ui_thread(lambda: self.show_loading_alert("Downloading resources..."))
 
-        temp = _get_temp_dir()
+        temp = get_temp_dir()
         if not temp:
             logcat("Temp directory is none.")
             return
