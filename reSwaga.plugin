@@ -1,3 +1,36 @@
+"""
+
+
+
+                            ДИСКЛЕЙМЕР
+
+Если при создании своего плагина вы решили использовать готовые кодовые решения
+нашего плагина у себя, то не забудьте упомянуть в описании своего плагина
+канал @MeeowPlugins в качестве кредитов за помощь в разработке плагина. Спасибо
+
+
+                  ⣾⡇⣿⣿⡇⣾⣿⣿⣿⣿⣿⣿⣿⣿⣄⢻⣦⡀⠁⢸⡌⠻⣿⣿⣿⡽⣿⣿
+                  ⡇⣿⠹⣿⡇⡟⠛⣉⠁⠉⠉⠻⡿⣿⣿⣿⣿⣿⣦⣄⡉⠂⠈⠙⢿⣿⣝⣿
+                  ⠤⢿⡄⠹⣧⣷⣸⡇⠄⠄⠲⢰⣌⣾⣿⣿⣿⣿⣿⣿⣶⣤⣤⡀⠄⠈⠻⢮
+                  ⠄⢸⣧⠄⢘⢻⣿⡇⢀⣀⠄⣸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣧⡀⠄⢀
+                  ⠄⠈⣿⡆⢸⣿⣿⣿⣬⣭⣴⣿⣿⣿⣿⣿⣿⣿⣯⠝⠛⠛⠙⢿⡿⠃⠄⢸
+                  ⠄⠄⢿⣿⡀⣿⣿⣿⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣿⣿⣿⣿⡾⠁⢠⡇⢀
+                  ⠄⠄⢸⣿⡇⠻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣏⣫⣻⡟⢀⠄⣿⣷⣾
+                  ⠄⠄⢸⣿⡇⠄⠈⠙⠿⣿⣿⣿⣮⣿⣿⣿⣿⣿⣿⣿⣿⡿⢠⠊⢀⡇⣿⣿
+                  ⠒⠤⠄⣿⡇⢀⡲⠄⠄⠈⠙⠻⢿⣿⣿⠿⠿⠟⠛⠋⠁⣰⠇⠄⢸⣿⣿⣿
+
+
+
+                            DISCLAIMER
+
+If, when creating your plugin, you decided to use the ready-made code solutions
+of our plugin, then do not forget to mention the @MeeowPlugins channel in the description
+of your plugin as credits for help in developing your plugin. Thanks
+
+
+
+"""
+
 import datetime
 import json
 import math
@@ -28,6 +61,9 @@ from ui.settings import Selector, Input, Divider, Header, Switch, Text
 from java.io import File
 from java.util import ArrayList, Locale
 
+from android.content import Intent
+from android.net import Uri
+
 from com.exteragram.messenger.plugins import PluginsController
 from com.exteragram.messenger.plugins.ui import PluginSettingsActivity
 
@@ -53,24 +89,25 @@ RESOURCES: List[str] = [
     "Circular-Regular.ttf",
     "Circular-Bold.ttf"
 ]
-DOWNLOAD_URL: str = "https://raw.githubusercontent.com/cherryymerryy/reSwaga/main/"
 
+DOWNLOAD_URL: str = "https://raw.githubusercontent.com/cherryymerryy/reSwaga/main/"
 REMOTE_CONFIG_URL: str = DOWNLOAD_URL + "config.json"
 REMOTE_CONFIG: Dict[str, Any] = {}
+
+PLATFORMS_COUNT: int = 7
+
+DEFAULT_API_URL = "https://your.api.url"
+DEFAULT_STREAM_STRING: str = "🎵 | {title} — {artists}"
+DEFAULT_VALUE: str = "platform value"
+DEFAULT_STREAM_TEXT: str = "🤙"
+DEFAULT_INSTANT_SUBTEXT: str = "Powered by"
+DEFAULT_INSTANT_MAIN_TEXT: str = __name__
 
 FONTS: Dict[int, str] = {
     0: "Onest",
     1: "Circular",
     2: "NotoSansJP"
 }
-
-PLATFORMS_COUNT: int = 7
-
-DEFAULT_STREAM_STRING: str = "🎵 | {title} — {artists}"
-DEFAULT_VALUE: str = "platform value"
-DEFAULT_STREAM_TEXT: str = "🤙"
-DEFAULT_INSTANT_SUBTEXT: str = "Powered by"
-DEFAULT_INSTANT_MAIN_TEXT: str = __name__
 DEFAULT_COLOR: Dict[str, str] = {
     "background_color": "#000000",
     "title_text_color": "#FFFFFF",
@@ -185,6 +222,13 @@ def open_plugin_settings():
         logcat(f"Error opening plugin settings: {e}")
 
 
+def open_link(url: str):
+    fragment = get_last_fragment()
+    ctx = fragment.getContext() if fragment else ApplicationLoader.applicationContext
+    intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+    run_on_ui_thread(lambda: ctx.startActivity(intent))
+
+
 class LocaleController:
     def __init__(self):
         super().__init__()
@@ -277,10 +321,18 @@ class LocaleController:
         Setting_Other_DeleteCached = "Очистить кэшированные данные авторизации"
         Setting_Other_Donate = "Поддержать разработку"
 
+        Settings_YandexMusic_Auth_Guide = "Инструкция авторизации"
+        Settings_YandexMusic_Auth_Guide_Text = "**инструкция**"
+
+        Settings_YandexMusic_CustomApi_Enable_Text = "Включить кастомное API"
+        Settings_YandexMusic_CustomApi_Enable_Subtext = "Внимание! Включайте это только если вы знаете что делаете."
+
+        Settings_YandexMusic_CustomApi_Input_Text = "Кастомное API"
+    
         Alert_HEX_Title = "⚠️ Ошибка HEX"
         Alert_HEX_Text = "Недопустимый HEX-код цвета"
         
-        Message_CaptionLink_Text = "[Track]({0})"
+        Message_CaptionLink_Text = "[{0}]({1})"
         Message_CaptionSongLink_Text = "[song.link]({0})"
         Message_CaptionDivider = " • "
 
@@ -381,10 +433,18 @@ class LocaleController:
         Setting_Other_DeleteCached = "Delete cached authentication data"
         Setting_Other_Donate = "Support Development"
 
+        Settings_YandexMusic_Auth_Guide = "Authentication Guide"
+        Settings_YandexMusic_Auth_Guide_Text = "**guide**"
+
+        Settings_YandexMusic_CustomApi_Enable_Text = "Enable Custom API"
+        Settings_YandexMusic_CustomApi_Enable_Subtext = "Warning! Enable this only if you know what you doing."
+
+        Settings_YandexMusic_CustomApi_Input_Text = "Custom API Url"
+
         Alert_HEX_Title = "⚠️ HEX Error"
         Alert_HEX_Text = "Invalid HEX color code"
         
-        Message_CaptionLink_Text = "[Track]({0})"
+        Message_CaptionLink_Text = "[{0}]({1})"
         Message_CaptionSongLink_Text = "[song.link]({0})"
         Message_CaptionDivider = " • "
 
@@ -460,19 +520,17 @@ class BasePlatform:
 
         self.memory_id: int = 0
         self.value_text: Optional[str] = None
+        self.pre_auth_settings: Optional[bool] = None
         self.additional_settings: Optional[bool] = None
 
     def get_track(self) -> Optional[Track]:
         pass
 
-    def create_additional_settings(self, plugin) -> List[Any]:
-        if self.additional_settings is False:
-            logcat("To enable additional settings, you need to enable it in the platform class.")
-            return []
-        
-        if plugin is None or not isinstance(plugin, ReSwagaPlugin):
-            logcat("Additional settings must have valid ReSwagaPlugin instance.")
-            return []
+    def create_pre_auth_settings(self, plugin: BasePlugin) -> List[Any]:
+        pass
+
+    def create_additional_settings(self, plugin: BasePlugin) -> List[Any]:
+        pass
 
 
 class Spotify(BasePlatform):
@@ -544,12 +602,13 @@ class Spotify(BasePlatform):
 
 
 class YandexMusic(BasePlatform):
-    def __init__(self, value: str):
+    def __init__(self, value: str, api_url: Optional[str] = None):
         super().__init__(value)
         self.token = value.strip()
         self.value_text = locale.Settings_Auth_Value_YandexMusic_Text
+        self.pre_auth_settings = True
         self.additional_settings = True
-        self.api_url: str = "https://track.mipoh.ru"
+        self.api_url: str = api_url if api_url else "https://track.mipoh.ru"
         self.headers = {
             "User-Agent": "Mozilla/5.0", 
             "Accept": "application/json", 
@@ -601,19 +660,58 @@ class YandexMusic(BasePlatform):
             self.now_track = Track(active=False)
             return Track(active=False)
 
+    def create_pre_auth_settings(self, plugin):
+        super().create_pre_auth_settings(plugin)
+        return [
+            Text(
+                text=locale.Settings_YandexMusic_Auth_Guide,
+                icon="msg_info",
+                on_click=lambda _: plugin.show_info_alert(
+                    title=locale.Settings_YandexMusic_Auth_Guide,
+                    message=locale.Settings_YandexMusic_Auth_Guide_Text,
+                    positive_text="Ok",
+                    neutral_text="Guide",
+                    neutral_listener=lambda: open_link("https://yandex-music.readthedocs.io/en/main/token.html")
+                )
+            )
+        ]
+
     def create_additional_settings(self, plugin: BasePlugin):
         super().create_additional_settings(plugin)
+        custom_api_url = plugin.get_setting("enable_yandex_custom_api_url", False)
         return [
-            Header("Authorization guide"),
-            Text(
-                text="test",
-                on_click=lambda zv: plugin.show_spinner()
-            ),
             Switch(
-                key="test_swaga",
+                key="enable_yandex_custom_api_url",
+                text=locale.Settings_YandexMusic_CustomApi_Enable_Text,
+                subtext=locale.Settings_YandexMusic_CustomApi_Enable_Subtext,
+                icon="msg_language",
                 default=False,
-                text="testswag"
-            )
+                on_change=lambda _: plugin.update_platform_object(
+                    plugin.get_setting("selected_platform", int(Platform.NotSelected.value)),
+                    True
+                )
+            ),
+            Input(
+                key="yandex_custom_api",
+                text=locale.Settings_YandexMusic_CustomApi_Input_Text,
+                icon="msg_instant_link",
+                default=DEFAULT_API_URL,
+                on_change=lambda _: plugin.update_platform_object(
+                    plugin.get_setting("selected_platform", int(Platform.NotSelected.value)),
+                    True
+                )
+            ) if custom_api_url else None,
+            Text(
+                text="Custom API Guide",
+                icon="msg_info",
+                on_click=lambda _: plugin.show_info_alert(
+                    title="custom api guide",
+                    message="guide",
+                    positive_text="Ok",
+                    neutral_text="Guide",
+                    neutral_listener=lambda: open_link("https://github.com/MIPOHBOPOHIH/YMMBFA")
+                )
+            ) if custom_api_url else None
         ]
 
 
@@ -824,6 +922,7 @@ class ReSwagaPlugin(BasePlugin):
             Selector(
                 key="selected_platform",
                 text=locale.Settings_Auth_Platform,
+                icon="msg_tone_on",
                 items=[locale.Settings_Auth_Value_NotSelected_Text, "Spotify", "Yandex.Music", "SoundCloud"],
                 default=0,
                 on_change=lambda new_value: self.update_platform_object(new_value, False)
@@ -837,9 +936,19 @@ class ReSwagaPlugin(BasePlugin):
             Input(
                 key="value",
                 text=locale.Settings_Auth_Value_Text if self.platform.value_text is None else self.platform.value_text,
-                on_change=lambda z: self.update_platform_object(self.get_setting("selected_platform", 0), True)
+                on_change=lambda _: self.update_platform_object(self.get_setting("selected_platform", 0), True),
+                icon="msg_pin_code"
             ) if selected_platform != int(Platform.NotSelected.value) else None
         ]
+
+        if self.platform.pre_auth_settings:
+            pre_auth_settings = self.platform.create_pre_auth_settings(self)
+            if len(pre_auth_settings) > 0:
+                settings += [ 
+                    Header(text=get_platform(selected_platform).name),
+                    Divider() 
+                ]
+                settings += pre_auth_settings
 
         if not is_value_valid:
             return settings
@@ -849,7 +958,12 @@ class ReSwagaPlugin(BasePlugin):
         if self.platform.additional_settings:
             additional_settings = self.platform.create_additional_settings(self)
             if len(additional_settings) > 0:
-                settings += [ Divider() ]
+                settings += [
+                    Divider(),
+                    Header(
+                        text=f"{get_platform(selected_platform).name} - Additional settings"
+                    ) 
+                ]
                 settings += additional_settings
 
         settings += [
@@ -1239,6 +1353,7 @@ class ReSwagaPlugin(BasePlugin):
                 run_on_ui_thread(lambda: self.dismiss_spinner())
                 return
 
+            platform = self.get_setting("selected_platform", 0)
             platform_link: int = self.get_setting("platform_link", 1)
             songlink: bool = self.get_setting("songlink_link_include", True)
             caption = ""
@@ -1248,13 +1363,11 @@ class ReSwagaPlugin(BasePlugin):
 
             if platform_link and platform_link != 0:
                 link = track.link if (platform_link == 1 or track is None) else track.album
-                caption += locale.Message_CaptionLink_Text.format(link)
+                caption += locale.Message_CaptionLink_Text.format(get_platform(platform).name, link)
 
             if songlink and songlink != 0:
                 if platform_link != 0:
                     caption += locale.Message_CaptionDivider
-
-                platform = self.get_setting("selected_platform", 0)
 
                 if platform == int(Platform.Spotify.value):
                     sl_platform = 's'
@@ -1326,10 +1439,11 @@ class ReSwagaPlugin(BasePlugin):
 
             account = get_account_instance()
             mime = "audio/mpeg"
+            caption = ""
             markdown_need = False
+            platform = self.get_setting("selected_platform", 0)
             platform_link = self.get_setting("platform_link", 1)
             songlink = self.get_setting("songlink_link_include", True)
-            caption = ""
 
             if any([platform_link != 0, songlink]):
                 markdown_need = True
@@ -1337,7 +1451,7 @@ class ReSwagaPlugin(BasePlugin):
 
             if platform_link and platform_link != 0:
                 link = track.link if (platform_link == 1 or track is None) else track.album
-                caption += locale.Message_CaptionLink_Text.format(link)
+                caption += locale.Message_CaptionLink_Text.format(get_platform(platform), link)
 
             if songlink and songlink != 0:
                 if platform_link != 0:
@@ -1387,7 +1501,8 @@ class ReSwagaPlugin(BasePlugin):
             self.platform = Spotify(token)
 
         elif new_platform == int(Platform.YandexMusic.value):
-            self.platform = YandexMusic(token)
+            custom_api_url: Optional[str] = self.get_setting("yandex_custom_api", None) if self.get_setting("enable_yandex_custom_api", False) else None
+            self.platform = YandexMusic(token, custom_api_url)
 
         elif new_platform == int(Platform.SoundCloud.value):
             self.platform = SoundCloud(token)
@@ -1955,6 +2070,10 @@ class ReSwagaPlugin(BasePlugin):
     def show_info_alert(self, title: str, message: str, positive_text: Optional[str] = None,
                         positive_listener: Optional[Callable] = None, neutral_text: Optional[str] = "Ok",
                         neutral_listener: Optional[Callable] = None):
+        if title == "" or message == "":
+            logcat("Title or message not found, can't show info alert.")
+            return
+
         fragment = get_last_fragment()
         ctx = fragment.getParentActivity() if fragment else ApplicationLoader.applicationContext
         if ctx is None:
@@ -2022,3 +2141,36 @@ class ReSwagaPlugin(BasePlugin):
             self.loading.dismiss()
 
         self.loading = None
+
+"""
+
+
+
+                            ДИСКЛЕЙМЕР
+
+Если при создании своего плагина вы решили использовать готовые кодовые решения
+нашего плагина у себя, то не забудьте упомянуть в описании своего плагина
+канал @MeeowPlugins в качестве кредитов за помощь в разработке плагина. Спасибо
+
+
+                  ⣾⡇⣿⣿⡇⣾⣿⣿⣿⣿⣿⣿⣿⣿⣄⢻⣦⡀⠁⢸⡌⠻⣿⣿⣿⡽⣿⣿
+                  ⡇⣿⠹⣿⡇⡟⠛⣉⠁⠉⠉⠻⡿⣿⣿⣿⣿⣿⣦⣄⡉⠂⠈⠙⢿⣿⣝⣿
+                  ⠤⢿⡄⠹⣧⣷⣸⡇⠄⠄⠲⢰⣌⣾⣿⣿⣿⣿⣿⣿⣶⣤⣤⡀⠄⠈⠻⢮
+                  ⠄⢸⣧⠄⢘⢻⣿⡇⢀⣀⠄⣸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣧⡀⠄⢀
+                  ⠄⠈⣿⡆⢸⣿⣿⣿⣬⣭⣴⣿⣿⣿⣿⣿⣿⣿⣯⠝⠛⠛⠙⢿⡿⠃⠄⢸
+                  ⠄⠄⢿⣿⡀⣿⣿⣿⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣿⣿⣿⣿⡾⠁⢠⡇⢀
+                  ⠄⠄⢸⣿⡇⠻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣏⣫⣻⡟⢀⠄⣿⣷⣾
+                  ⠄⠄⢸⣿⡇⠄⠈⠙⠿⣿⣿⣿⣮⣿⣿⣿⣿⣿⣿⣿⣿⡿⢠⠊⢀⡇⣿⣿
+                  ⠒⠤⠄⣿⡇⢀⡲⠄⠄⠈⠙⠻⢿⣿⣿⠿⠿⠟⠛⠋⠁⣰⠇⠄⢸⣿⣿⣿
+
+
+
+                            DISCLAIMER
+
+If, when creating your plugin, you decided to use the ready-made code solutions
+of our plugin, then do not forget to mention the @MeeowPlugins channel in the description
+of your plugin as credits for help in developing your plugin. Thanks
+
+
+
+"""
