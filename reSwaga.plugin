@@ -50,7 +50,7 @@ from typing import Optional, Any, Callable, List, Dict
 from secrets import choice
 
 from android_utils import log, run_on_ui_thread
-from base_plugin import BasePlugin, HookResult, HookStrategy, AppEvent
+from base_plugin import BasePlugin, HookResult, HookStrategy, AppEvent, MenuItemData, MenuItemType
 from client_utils import get_last_fragment, get_user_config, get_send_messages_helper, send_message, \
     get_messages_controller, send_request, get_messages_storage, get_account_instance
 from markdown_utils import parse_markdown
@@ -67,7 +67,7 @@ from android.net import Uri
 from com.exteragram.messenger.plugins import PluginsController
 from com.exteragram.messenger.plugins.ui import PluginSettingsActivity
 
-from org.telegram.tgnet import TLRPC, TLObject
+from org.telegram.tgnet import TLRPC
 from org.telegram.tgnet.tl import TL_account
 from org.telegram.messenger import ApplicationLoader, R, AndroidUtilities, SendMessagesHelper
 
@@ -75,7 +75,7 @@ __id__ = "reswag"
 __name__ = "reSwaga"
 __description__ = "Плагин для отправки карточки/аудио файла текущего трека для музыкальных сервисов."
 __icon__ = "remusic/0"
-__version__ = "1.0.1"
+__version__ = "1.0.0"
 __author__ = "@meeowPlugins"
 __min_version__ = "11.12.1"
 
@@ -94,7 +94,7 @@ DOWNLOAD_URL: str = "https://raw.githubusercontent.com/cherryymerryy/reSwaga/mai
 REMOTE_CONFIG_URL: str = DOWNLOAD_URL + "config.json"
 REMOTE_CONFIG: Dict[str, Any] = {}
 
-PLATFORMS_COUNT: int = 7
+PLATFORMS_COUNT: int = 5
 
 DEFAULT_API_URL = "https://your.api.url"
 DEFAULT_STREAM_STRING: str = "🎵 | {title} — {artists}"
@@ -254,6 +254,9 @@ class LocaleController:
         Settings_Auth_Value_YandexMusic_Text = "Токен"
         Settings_Auth_Value_SoundCloud_Text = "Токен"
 
+        Settings_YandexMusic_LoginGuide = "Перейдите к инструкции по получению токена, войдите в аккаунт Яндекса и вставьте токен ниже."
+        Settings_VkMusic_LoginGuide = "Перейдите на сайт и изучите как нужно правильно получить токен, после изучения выберите 'vk.com'"
+
         Settings_CardSettings_Header = "Внешний вид"
 
         Settings_BackgroundMode_Text = "Фон"
@@ -314,11 +317,14 @@ class LocaleController:
         Settings_FormatInStream_Text = "Формат"
         Settings_FormatInStream_Subtext = "Формат отображения трека. {title} — название трека, {artists} — артист(ы)"
 
+        Settings_Cache_Header = "Кэш"
+        Setting_Cache_Enable_Text = "Кэширование данных авторизации"
+        Setting_Cache_DeleteCached = "Очистить кэшированные данные авторизации"
+
         Settings_Other_Header = "Прочее"
 
         Setting_Other_SourceCheck = "Проверка целостности файлов"
         Setting_Other_ForceDownload = "Скачать все ресурсы заново"
-        Setting_Other_DeleteCached = "Очистить кэшированные данные авторизации"
         Setting_Other_Donate = "Поддержать разработку"
 
         Settings_YandexMusic_Auth_Guide = "Инструкция авторизации"
@@ -337,10 +343,14 @@ class LocaleController:
         Message_CaptionDivider = " • "
 
         Check_Value_NotValid = "Указанное значение сервиса не валидно."
-        Check_Platform_NotSelected = "Вы не указали используемый вами сервис."
-        Check_Resources_NotFound = "Необходимые ресурсы не найдены."
         Check_Value_NotValid_Button = "Изменить"
+
+        Check_Platform_NotSelected = "Вы не указали используемый вами сервис."
         Check_Platform_NotSelected_Button = "Выбрать"
+
+        Check_Platform_DownloadNotAvailable = "Для текущего сервиса '.nowt' недоступна."
+        
+        Check_Resources_NotFound = "Необходимые ресурсы не найдены."
         Check_Resources_NotFound_Button = "Скачать"
 
         CachedAuthData_Clear_Success = "Кэшированные данные авторизации удалены."
@@ -350,6 +360,16 @@ class LocaleController:
         SourceSuccess_Text = "Ошибок при проверке ресурсов не найдено"
 
         Track_Not_Active = "Плеер неактивен."
+
+        VkMusic_Id = "ID аккаунта VK"
+        VkMusic_Id_NotValid = "ID аккаунта VK не валиден."
+        VkMusic_Audio_NotFound = "Трек не найден."
+        VkMusic_Warning = "❗❗❗Внимание❗❗❗\nСервис ВК Музыка будет работать только если у вас ВК включена трансляция трека в ваш профиль."
+
+        Action_Fix = "Исправить"
+
+        Platform_YandexMusic = "Яндекс Музыка"
+        Platform_VkMusic = "ВК Музыка"
 
         Alert_Donate_Title = "Поддержка разработки"
         Alert_Donate_Text = "Ниже вы можете скопировать TON-адрес разработчиков reMusic и поддержать проект донатом."
@@ -365,6 +385,9 @@ class LocaleController:
         Settings_Auth_Value_Spotify_Text = "Username"
         Settings_Auth_Value_YandexMusic_Text = "Token"
         Settings_Auth_Value_SoundCloud_Text = "Token"
+
+        Settings_YandexMusic_LoginGuide = "Go to token guide, log in to your Yandex account, and paste your token below."
+        Settings_VkMusic_LoginGuide = "Go to the website and learn how to get a token correctly. After studying, select 'vk.com' and log-in in to your VK account."
 
         Settings_CardSettings_Header = "Customization"
 
@@ -426,11 +449,14 @@ class LocaleController:
         Settings_FormatInStream_Text = "Format"
         Settings_FormatInStream_Subtext = "Customize track display. {title} — track name, {artists} — artist(s)"
 
+        Settings_Cache_Header = "Cache"
+        Setting_Cache_Enable_Text = "Caching of authorization data"
+        Setting_Cache_DeleteCached = "Delete cached authentication data"
+
         Settings_Other_Header = "Other"
 
         Setting_Other_SourceCheck = "File Integrity Check"
         Setting_Other_ForceDownload = "Download Full Resource Package"
-        Setting_Other_DeleteCached = "Delete cached authentication data"
         Setting_Other_Donate = "Support Development"
 
         Settings_YandexMusic_Auth_Guide = "Authentication Guide"
@@ -449,10 +475,14 @@ class LocaleController:
         Message_CaptionDivider = " • "
 
         Check_Value_NotValid = "Platform value is not valid."
-        Check_Platform_NotSelected = "You can't use command without selected platform."
-        Check_Resources_NotFound = "Plugin resources not found."
         Check_Value_NotValid_Button = "Change"
+
+        Check_Platform_NotSelected = "You can't use command without selected platform."
         Check_Platform_NotSelected_Button = "Select"
+
+        Check_Platform_DownloadNotAvailable = "For current service '.nowt' not available."
+
+        Check_Resources_NotFound = "Plugin resources not found."
         Check_Resources_NotFound_Button = "Download"
 
         CachedAuthData_Clear_Success = "Cached authorization data removed."
@@ -462,6 +492,16 @@ class LocaleController:
         SourceSuccess_Text = "No issues detected during resource check"
 
         Track_Not_Active = "Player not active."
+
+        VkMusic_Id = "VK account ID"
+        VkMusic_Id_NotValid = "VK account ID not valid."
+        VkMusic_Audio_NotFound = "Track not found."
+        VkMusic_Warning = "❗❗❗Warning❗❗❗\nService VK Music working only if you enabled stream track in to profile in VK"
+
+        Action_Fix = "Fix"
+
+        Platform_YandexMusic = "Yandex.Music"
+        Platform_VkMusic = "VK Music"
 
         Alert_Donate_Title = "Support Development"
         Alert_Donate_Text = "Below you can copy the TON address of the reMusic developers and support the development with your donation."
@@ -500,13 +540,11 @@ class Track:
 
 
 class Platform(Enum):
-    NotSelected = 0
-    Spotify = 1
-    YandexMusic = 2
-    SoundCloud = 3
-    VkMusic = 4
-    YouTubeMusic = 5
-    Tidal = 6
+    NotSelected = (0, locale.Settings_Auth_Value_NotSelected_Text)
+    Spotify = (1, 'Spotify')
+    YandexMusic = (2, locale.Platform_YandexMusic)
+    SoundCloud = (3, 'SoundCloud')
+    VkMusic = (4, locale.Platform_VkMusic)
 
 
 class BasePlatform:
@@ -522,8 +560,13 @@ class BasePlatform:
         self.value_text: Optional[str] = None
         self.pre_auth_settings: Optional[bool] = None
         self.additional_settings: Optional[bool] = None
+        self.can_download_track: bool = True
+        self.need_special_platform_args_check: bool = False
 
     def get_track(self) -> Optional[Track]:
+        pass
+
+    def special_platform_args_check(self, plugin: BasePlugin) -> bool:
         pass
 
     def create_pre_auth_settings(self, plugin: BasePlugin) -> List[Any]:
@@ -608,6 +651,7 @@ class YandexMusic(BasePlatform):
         self.value_text = locale.Settings_Auth_Value_YandexMusic_Text
         self.pre_auth_settings = True
         self.additional_settings = True
+        self.need_special_platform_args_check = True
         self.api_url: str = api_url if api_url else "https://track.mipoh.ru"
         self.headers = {
             "User-Agent": "Mozilla/5.0", 
@@ -660,15 +704,28 @@ class YandexMusic(BasePlatform):
             self.now_track = Track(active=False)
             return Track(active=False)
 
+    def special_platform_args_check(self, plugin):
+        if plugin.get_setting('enable_yandex_custom_api_url', False):
+            yandex_custom_api: Optional[str] = plugin.get_setting('yandex_custom_api', None)
+            if yandex_custom_api in ["", None]:
+                return True
+            elif not yandex_custom_api.startswith('https://') and not yandex_custom_api.startswith('http://'):
+                return True
+            elif len(yandex_custom_api) <= 7:
+                return True
+            else:
+                return True
+        else:
+            return False
+
     def create_pre_auth_settings(self, plugin):
-        super().create_pre_auth_settings(plugin)
         return [
             Text(
                 text=locale.Settings_YandexMusic_Auth_Guide,
                 icon="msg_info",
                 on_click=lambda _: plugin.show_info_alert(
                     title=locale.Settings_YandexMusic_Auth_Guide,
-                    message=locale.Settings_YandexMusic_Auth_Guide_Text,
+                    message=locale.Settings_YandexMusic_LoginGuide,
                     positive_text="Ok",
                     neutral_text="Guide",
                     neutral_listener=lambda: open_link("https://yandex-music.readthedocs.io/en/main/token.html")
@@ -677,7 +734,6 @@ class YandexMusic(BasePlatform):
         ]
 
     def create_additional_settings(self, plugin: BasePlugin):
-        super().create_additional_settings(plugin)
         custom_api_url = plugin.get_setting("enable_yandex_custom_api_url", False)
         return [
             Switch(
@@ -687,7 +743,7 @@ class YandexMusic(BasePlatform):
                 icon="msg_language",
                 default=False,
                 on_change=lambda _: plugin.update_platform_object(
-                    plugin.get_setting("selected_platform", int(Platform.NotSelected.value)),
+                    plugin.get_setting("selected_platform", int(Platform.NotSelected.value[0])),
                     True
                 )
             ),
@@ -697,7 +753,7 @@ class YandexMusic(BasePlatform):
                 icon="msg_instant_link",
                 default=DEFAULT_API_URL,
                 on_change=lambda _: plugin.update_platform_object(
-                    plugin.get_setting("selected_platform", int(Platform.NotSelected.value)),
+                    plugin.get_setting("selected_platform", int(Platform.NotSelected.value[0])),
                     True
                 )
             ) if custom_api_url else None,
@@ -759,6 +815,7 @@ class SoundCloud(BasePlatform):
             'linked_partitioning': '1'
         }
         self.api_url: str = 'https://api-v2.soundcloud.com/'
+        self.can_download_track = False
 
     def get_track(self) -> Optional[Track]:
         if not self.token:
@@ -827,6 +884,112 @@ class SoundCloud(BasePlatform):
             show_info(str(e))
             return Track(active=False)
 
+# FROM 'VkNowPlay' PLUGIN
+class VkMusic(BasePlatform):
+    def __init__(self, value: str, vk_id: Optional[int] = None):
+        super().__init__(value)
+        self.value_text = locale.Settings_Auth_Value_YandexMusic_Text
+        self.token: str = value.strip()
+        self.vk_id: Optional[int] = vk_id
+        self.pre_auth_settings = True
+        self.additional_settings = True
+        self.can_download_track = False
+        self.need_special_platform_args_check = True
+
+    def get_track(self) -> Optional[Track]:
+        params: Dict[str, str|int] = {
+            'user_ids': self.vk_id,
+            'fields': 'status',
+            'v': 5.199,
+            'access_token': self.token
+        }
+
+        try:
+            response = requests.get('https://api.vk.com/method/users.get', params=params)
+            data = response.json()
+
+            if data.get('response', None) is None:
+                return Track(active=False)
+            
+            response = data['response'][0]
+
+            if response.get('status_audio', None) is None:
+                show_info(locale.VkMusic_Audio_NotFound)
+                return Track(active=False)
+            
+            t = response.get('status_audio', None)
+            if t is None:
+                return Track(active=False)
+            
+            main_artists: list = t.get('main_artists', None)
+            artists: list = [ma for ma in main_artists]
+            artists_names: list[str] = [a.get('name', 'Artist w/out name') for a in artists]
+
+            album = t.get('album', None)
+            thumbnail = album.get('thumb', None)
+
+            track = Track(
+                active=True,
+                track_id=t.get('id', 0),
+                title=t.get('title', 'No title provided'),
+                artist=artists_names,
+                album=f"https://vk.com/music/album/{album.get('owner_id', 0)}_{album.get('id', 0)}_{album.get('access_key', None)}",
+                thumb=thumbnail.get('photo_1200', None),
+                duration=t.get('duration', 0),
+                link=f"https://vk.com/audio{t.get('owner_id', 0)}_{t.get('id', 0)}"
+            )
+
+            self.now_track = track
+            return track
+        
+        except Exception as e:
+            logcat(f"Exception occurred while getting VK status: {e}")
+            return Track(active=False)
+
+    def special_platform_args_check(self, plugin):
+        if plugin.get_setting('vk_music_id', None) in [0, None, ""]:
+            show_error(
+                message=locale.VkMusic_Id_NotValid,
+                on_click=lambda: open_plugin_settings(),
+                button_text=locale.Action_Fix
+            )
+            return True
+        
+        else:
+            return False
+
+    def create_pre_auth_settings(self, plugin):
+        return [
+            Text(
+                text=locale.Settings_YandexMusic_Auth_Guide,
+                icon="msg_info",
+                on_click=lambda _: plugin.show_info_alert(
+                    title=locale.Settings_YandexMusic_Auth_Guide,
+                    message=locale.Settings_VkMusic_LoginGuide,
+                    positive_text="Ok",
+                    neutral_text="Guide",
+                    neutral_listener=lambda: open_link("https://vkhost.github.io/")
+                )
+            ),
+            Input(
+                key="vk_music_id",
+                text=locale.VkMusic_Id,
+                icon="msg_mention",
+                default="0",
+                on_change=lambda _: plugin.update_platform_object(
+                    plugin.get_setting("selected_platform", int(Platform.NotSelected.value[0])),
+                    True
+                )
+            )
+        ]
+
+    def create_additional_settings(self, plugin):
+        return [
+            Divider(
+                text=locale.VkMusic_Warning
+            )
+        ]
+
 
 def get_platform(platform: int) -> Platform:
     if platform == 0:
@@ -837,6 +1000,8 @@ def get_platform(platform: int) -> Platform:
         return Platform.YandexMusic
     elif platform == 3:
         return Platform.SoundCloud
+    elif platform == 4:
+        return Platform.VkMusic
     else:
         return Platform.NotSelected
 
@@ -891,19 +1056,21 @@ class ReSwagaPlugin(BasePlugin):
             self.save_default_user_bio()
 
         current_platform = self.get_setting("selected_platform", 0)
-        
-        if current_platform != int(Platform.NotSelected.value):
+        if current_platform != int(Platform.NotSelected.value[0]):
             self.update_platform_object(current_platform, True)
 
-        if not self.is_cached_values_exist():
-            self.initialize_cached_platforms_values()
-        else:
-            if current_platform != int(Platform.NotSelected.value):
-                cached_value = self.get_cached_value(current_platform)
-                current_value = self.get_setting("value", DEFAULT_VALUE)
+        if self.get_setting("enable_auth_data_cache", False):
+            if not self.is_cached_values_exist():
+                self.initialize_cached_platforms_values()
+            else:
+                if current_platform != int(Platform.NotSelected.value[0]):
+                    cached_value = self.get_cached_value(current_platform)
+                    current_value = self.get_setting("value", DEFAULT_VALUE)
 
-                if cached_value != current_value:
-                    self.save_platform_value(current_platform, current_value)
+                    if cached_value != current_value:
+                        self.save_platform_value(current_platform, current_value)
+            
+        # self.create_menu_items()
 
         logcat(f"Plugin loaded.")
 
@@ -914,6 +1081,7 @@ class ReSwagaPlugin(BasePlugin):
         logcat(f"Plugin unloaded.")
 
     def create_settings(self):
+        platforms = [p.value[1] for p in Platform]
         selected_platform = self.get_setting("selected_platform", 0)
         is_value_valid = self.is_platform_value_valid(selected_platform)
 
@@ -923,13 +1091,13 @@ class ReSwagaPlugin(BasePlugin):
                 key="selected_platform",
                 text=locale.Settings_Auth_Platform,
                 icon="msg_tone_on",
-                items=[locale.Settings_Auth_Value_NotSelected_Text, "Spotify", "Yandex.Music", "SoundCloud"],
+                items=platforms,
                 default=0,
                 on_change=lambda new_value: self.update_platform_object(new_value, False)
             )
         ]
 
-        if selected_platform == int(Platform.NotSelected.value):
+        if selected_platform == int(Platform.NotSelected.value[0]):
             return settings
 
         settings += [
@@ -938,14 +1106,14 @@ class ReSwagaPlugin(BasePlugin):
                 text=locale.Settings_Auth_Value_Text if self.platform.value_text is None else self.platform.value_text,
                 on_change=lambda _: self.update_platform_object(self.get_setting("selected_platform", 0), True),
                 icon="msg_pin_code"
-            ) if selected_platform != int(Platform.NotSelected.value) else None
+            ) if selected_platform != int(Platform.NotSelected.value[0]) else None
         ]
 
         if self.platform.pre_auth_settings:
             pre_auth_settings = self.platform.create_pre_auth_settings(self)
             if len(pre_auth_settings) > 0:
                 settings += [ 
-                    Header(text=get_platform(selected_platform).name),
+                    Header(text=get_platform(selected_platform).value[1]),
                     Divider() 
                 ]
                 settings += pre_auth_settings
@@ -961,7 +1129,7 @@ class ReSwagaPlugin(BasePlugin):
                 settings += [
                     Divider(),
                     Header(
-                        text=f"{get_platform(selected_platform).name} - Additional settings"
+                        text=f"{get_platform(selected_platform).value[1]} - Additional settings"
                     ) 
                 ]
                 settings += additional_settings
@@ -1049,21 +1217,32 @@ class ReSwagaPlugin(BasePlugin):
             ),
             Divider(text=locale.Settings_Stream_Alert),
 
+            Header(text=locale.Settings_Cache_Header),
+            Switch(
+                key="enable_auth_data_cache",
+                text=locale.Setting_Cache_Enable_Text,
+                icon="menu_clear_cache",
+                default=False,
+                on_change=lambda new_value: self.update_cache(new_value)
+            ),
+            Text(
+                text=locale.Setting_Cache_DeleteCached,
+                icon="msg_delete",
+                on_click=lambda _: self.clear_cached_platforms_values()
+            ) if self.get_setting("enable_auth_data_cache", False) else None,
+
+            Divider(),
+
             Header(text=locale.Settings_Other_Header),
             Text(
                 text=locale.Setting_Other_SourceCheck,
                 icon="msg_noise_on",
-                on_click=lambda view: self.check_resources(True, True)
+                on_click=lambda _: self.check_resources(True, True)
             ),
             Text(
                 text=locale.Setting_Other_ForceDownload,
                 icon="msg_download",
-                on_click=lambda view: threading.Thread(target=self.download_resources, args=(True,), daemon=True).start()
-            ),
-            Text(
-                text=locale.Setting_Other_DeleteCached,
-                icon="msg_delete",
-                on_click=lambda zv: self.clear_cached_platforms_values()
+                on_click=lambda _: threading.Thread(target=self.download_resources, args=(True,), daemon=True).start()
             ),
             Text(
                 text=locale.Setting_Other_Donate,
@@ -1169,7 +1348,11 @@ class ReSwagaPlugin(BasePlugin):
                         daemon=True
                     ).start()
 
-                elif text == ".nowt" or text == ". nowt":
+                elif (text == ".nowt" or text == ". nowt"):
+                    if not self.platform.can_download_track:
+                        show_info(locale.Check_Platform_DownloadNotAvailable)
+                        return HookResult(strategy=HookStrategy.CANCEL)
+
                     threading.Thread(
                         target=self.send_audio_message,
                         args=(params.peer, params.replyToMsg, params.replyToTopMsg),
@@ -1230,9 +1413,27 @@ class ReSwagaPlugin(BasePlugin):
         else:
             logcat("No need to enable/disable poller.")
 
+    def create_menu_items(self):
+        cache_enabled: bool = self.get_setting("enable_auth_data_cache", False)
+
+        if not cache_enabled:
+            return
+        
+        cached_values = self.get_cached_values()
+        for value in cached_values:
+            if value == DEFAULT_VALUE:
+                continue
+
+            item: MenuItemData = MenuItemData(
+                menu_type=MenuItemType.CHAT_ACTION_MENU,
+                text=Platform[cached_values.index(value)].value[1],
+                on_click=lambda: show_info("test")
+            )
+            self.add_menu_item(item)
+
     def is_platform_value_valid(self, platform: int) -> bool:
         value = str(self.get_setting("value", DEFAULT_VALUE))
-        if platform == int(Platform.YandexMusic.value):
+        if platform == int(Platform.YandexMusic.value[0]):
             return not len(value) <= 4 and not value in ["", None, DEFAULT_VALUE]
         else:
             return not value in ["", None, DEFAULT_VALUE]
@@ -1241,6 +1442,14 @@ class ReSwagaPlugin(BasePlugin):
         empty_values = [DEFAULT_VALUE for _ in range(PLATFORMS_COUNT)]
         self.set_setting("cached_values", json.dumps(empty_values))
         logcat("Cached values initialized.")
+    
+    def update_cache(self, new_value: bool):
+        self.initialize_cached_platforms_values()
+        if new_value:
+            self.save_platform_value(
+                self.get_setting("selected_platform", int(Platform.NotSelected.value[0])),
+                self.get_setting("value", DEFAULT_VALUE)
+            )
 
     def clear_cached_platforms_values(self):
         self.initialize_cached_platforms_values()
@@ -1249,7 +1458,7 @@ class ReSwagaPlugin(BasePlugin):
         show_info(cached_values)
         if len(values) == PLATFORMS_COUNT:
             self.save_platform_value(
-                self.get_setting("selected_platform", int(Platform.NotSelected.value)),
+                self.get_setting("selected_platform", int(Platform.NotSelected.value[0])),
                 self.get_setting("value", DEFAULT_VALUE)
             )
             show_success(locale.CachedAuthData_Clear_Success)
@@ -1265,7 +1474,10 @@ class ReSwagaPlugin(BasePlugin):
         
         exist_values[platform] = value
         self.set_setting("cached_values", json.dumps(exist_values))
-        logcat(f"Saved value '{value}' at index {platform}.")
+        
+        if self.is_cached_value_exist(platform):
+            show_success("New service value cached.")
+            logcat(f"Saved value '{value}' at index {platform}.")
     
     def is_cached_values_exist(self) -> bool:
         raw_values = self.get_setting("cached_values", None)
@@ -1363,17 +1575,17 @@ class ReSwagaPlugin(BasePlugin):
 
             if platform_link and platform_link != 0:
                 link = track.link if (platform_link == 1 or track is None) else track.album
-                caption += locale.Message_CaptionLink_Text.format(get_platform(platform).name, link)
+                caption += locale.Message_CaptionLink_Text.format(get_platform(platform).value[1], link)
 
             if songlink and songlink != 0:
                 if platform_link != 0:
                     caption += locale.Message_CaptionDivider
 
-                if platform == int(Platform.Spotify.value):
+                if platform == int(Platform.Spotify.value[0]):
                     sl_platform = 's'
-                elif platform == int(Platform.YandexMusic.value):
+                elif platform == int(Platform.YandexMusic.value[0]):
                     sl_platform = 'ya'
-                elif platform == int(Platform.SoundCloud.value):
+                elif platform == int(Platform.SoundCloud.value[0]):
                     sl_platform = 'sc'
                 else:
                     sl_platform = 'sc'
@@ -1451,7 +1663,7 @@ class ReSwagaPlugin(BasePlugin):
 
             if platform_link and platform_link != 0:
                 link = track.link if (platform_link == 1 or track is None) else track.album
-                caption += locale.Message_CaptionLink_Text.format(get_platform(platform), link)
+                caption += locale.Message_CaptionLink_Text.format(get_platform(platform).value[1], link)
 
             if songlink and songlink != 0:
                 if platform_link != 0:
@@ -1479,8 +1691,10 @@ class ReSwagaPlugin(BasePlugin):
             show_error(str(e))
 
     def update_platform_object(self, new_platform: int, value: bool):
+        cache_enabled: bool = self.get_setting("enable_auth_data_cache", False)
+
         if not value:
-            if self.is_cached_value_exist(new_platform):
+            if self.is_cached_value_exist(new_platform) and cache_enabled:
                 self.set_setting("value", self.get_cached_value(new_platform))
             else:
                 self.set_setting("value", DEFAULT_VALUE)
@@ -1488,27 +1702,33 @@ class ReSwagaPlugin(BasePlugin):
         token = self.get_setting("value", DEFAULT_VALUE)
         token_default_values = ["", None, DEFAULT_VALUE]
 
-        if new_platform != int(Platform.NotSelected.value):
-            if self.is_cached_value_exist(new_platform):
+        if new_platform != int(Platform.NotSelected.value[0]):
+            if self.is_cached_value_exist(new_platform) and cache_enabled:
                 cached_value = self.get_cached_value(new_platform)
                 if cached_value != token:
                     self.save_platform_value(new_platform, token)
 
-        if new_platform == int(Platform.NotSelected.value):
+        if new_platform == int(Platform.NotSelected.value[0]):
             self.platform = None
 
-        elif new_platform == int(Platform.Spotify.value):
+        elif new_platform == int(Platform.Spotify.value[0]):
             self.platform = Spotify(token)
 
-        elif new_platform == int(Platform.YandexMusic.value):
+        elif new_platform == int(Platform.YandexMusic.value[0]):
             custom_api_url: Optional[str] = self.get_setting("yandex_custom_api", None) if self.get_setting("enable_yandex_custom_api", False) else None
             self.platform = YandexMusic(token, custom_api_url)
 
-        elif new_platform == int(Platform.SoundCloud.value):
+        elif new_platform == int(Platform.SoundCloud.value[0]):
             self.platform = SoundCloud(token)
+
+        elif new_platform == int(Platform.VkMusic.value[0]):
+            self.platform = VkMusic(token, self.get_setting('vk_music_id', None))
 
         else:
             logcat(f"Unknown platform ({new_platform})")
+
+        if self.get_setting("default_stream_text", DEFAULT_STREAM_TEXT) == DEFAULT_STREAM_TEXT:
+            self.save_default_user_bio()
 
         self.set_stream_text(True)
 
@@ -1523,12 +1743,15 @@ class ReSwagaPlugin(BasePlugin):
             logcat("Unknown token state, can't do anything")
 
     def is_args_not_valid(self, platform: int) -> bool:
-        if platform == int(Platform.NotSelected.value) or self.platform is None:
+        if platform == int(Platform.NotSelected.value[0]) or self.platform is None:
             show_error(
                 message=locale.Check_Platform_NotSelected,
                 on_click=lambda: open_plugin_settings(),
                 button_text=locale.Check_Platform_NotSelected_Button
             )
+            return True
+
+        if self.platform.need_special_platform_args_check and self.platform.special_platform_args_check(self):
             return True
 
         elif not self.is_platform_value_valid(platform):
@@ -1738,235 +1961,245 @@ class ReSwagaPlugin(BasePlugin):
         logcat("Poller disabled.")
 
     def _make_card(self):
-        track = self.platform.now_track
-        temp_dir = get_temp_dir()
-        font_family = self.get_setting("font", 0)
-        font_family = FONTS[font_family]
-        width, height = 1440, 600
+        try:
+            track = self.platform.now_track
+            temp_dir = get_temp_dir()
+            font_family = self.get_setting("font", 0)
+            font_family = FONTS[font_family]
+            width, height = 1440, 600
 
-        advanced_mode = self.get_setting("advanced_mode", False)
-        if not advanced_mode:
-            background_color = DEFAULT_COLOR["background_color"]
-            title_text_color = DEFAULT_COLOR["title_text_color"]
-            subtext_color = DEFAULT_COLOR["subtext_color"]
-        else:
-            background_color = self.get_setting("background_color", DEFAULT_COLOR["background_color"])
-            title_text_color = self.get_setting("title_text_color", DEFAULT_COLOR["title_text_color"])
-            subtext_color = self.get_setting("subtext_color", DEFAULT_COLOR["subtext_color"])
+            advanced_mode = self.get_setting("advanced_mode", False)
+            if not advanced_mode:
+                background_color = DEFAULT_COLOR["background_color"]
+                title_text_color = DEFAULT_COLOR["title_text_color"]
+                subtext_color = DEFAULT_COLOR["subtext_color"]
+            else:
+                background_color = self.get_setting("background_color", DEFAULT_COLOR["background_color"])
+                title_text_color = self.get_setting("title_text_color", DEFAULT_COLOR["title_text_color"])
+                subtext_color = self.get_setting("subtext_color", DEFAULT_COLOR["subtext_color"])
 
-        if not track.active:
-            if locale.language == 'ru' and font_family == "Circular":
-                font_family = "Onest"
+            if not track.active:
+                if locale.language == 'ru' and font_family == "Circular":
+                    font_family = "Onest"
 
-            card = Image.new('RGB', (width, height), background_color)
+                card = Image.new('RGB', (width, height), background_color)
+                draw = ImageDraw.Draw(card)
+
+                regular_plugin_font = File(temp_dir, f"{font_family}-Regular.ttf").getAbsolutePath()
+                bold_plugin_font = File(temp_dir, f"{font_family}-Bold.ttf").getAbsolutePath()
+                plugin_font = ImageFont.truetype(regular_plugin_font, 40)
+                not_active_font = ImageFont.truetype(bold_plugin_font, 80)
+
+                draw.text(
+                    xy = (width // 2, 45),
+                    text = __name__,
+                    font=plugin_font,
+                    fill=title_text_color,
+                    align="center",
+                    anchor="mm"
+                )
+
+                draw.text(
+                    xy = (width // 2, height // 2),
+                    text = "player_not_active_text",
+                    font=not_active_font,
+                    fill=title_text_color,
+                    align="center",
+                    anchor="mm"
+                )
+
+                filename = f"now_{__name__}.png"
+                temp_photo_path = File(temp_dir, filename).getAbsolutePath()
+                card.save(temp_photo_path)
+                return temp_photo_path
+
+            background_setting = self.get_setting("background", 1)
+
+            thumb = requests.get(track.thumb, stream=True).raw
+            background = Image.open(thumb)
+            thumbnail = background.copy()
+
+            if background_setting == 0:
+                background = background.resize((width, width)).crop((0, (width - height) // 2, width, width)).filter(
+                    ImageFilter.GaussianBlur(radius=14))
+                background = ImageEnhance.Brightness(background).enhance(0.3)
+                card = Image.new('RGB', (width, height), background_color)
+                card.paste(background, (0, 0))
+            elif not advanced_mode:
+                img = background.resize((16, 16), Resampling.LANCZOS)
+                pixels = img.load()
+                l_width, l_height = img.size
+
+                for y in range(l_height):
+                    for x in range(l_width):
+                        if img.mode == 'L':
+                            r = pixels[x, y]
+                            r = math.pow(r / 255.0, 1 / 2.2) * 255.0
+                            pixels[x, y] = int(r)
+                        else:
+                            r, g, b = pixels[x, y][:3]
+                            r = math.pow(r / 255.0, 1 / 2.2) * 255.0
+                            g = math.pow(g / 255.0, 1 / 2.2) * 255.0
+                            b = math.pow(b / 255.0, 1 / 2.2) * 255.0
+                            if img.mode == 'RGB':
+                                pixels[x, y] = (int(r), int(g), int(b))
+                            elif img.mode == 'RGBA':
+                                a = pixels[x, y][3]
+                                pixels[x, y] = (int(r), int(g), int(b), a)
+
+                if img.mode == 'L':
+                    img = img.convert('RGB')
+                elif img.mode == 'RGBA':
+                    rgb_img = Image.new('RGB', img.size)
+                    rgb_img.paste(img, mask=img.split()[3])
+                    img = rgb_img
+
+                pixels = list(img.getdata())
+                i_width, i_height = img.size
+
+                if img.mode == 'RGB':
+                    total_r, total_g, total_b = 0, 0, 0
+                    darkness_index = 1.9
+                    for r, g, b in pixels:
+                        total_r += int(r // darkness_index)
+                        total_g += int(g // darkness_index)
+                        total_b += int(b // darkness_index)
+                    count = i_width * i_height
+                    average = (total_r // count, total_g // count, total_b // count)
+                else:
+                    total = sum(pixels)
+                    average = (total // (i_width * i_height),) * 3
+                card = Image.new('RGB', (width, height), average)
+
+            else:
+                card = Image.new('RGB', (width, height), background_color)
+
+            thumbnail = thumbnail.resize((450, 450))
+            mask = Image.new('L', thumbnail.size, 0)
+            draw = ImageDraw.Draw(mask)
+            draw.rounded_rectangle((0, 0, *thumbnail.size), 30, fill=255)
+            thumbnail = thumbnail.copy()
+            thumbnail.putalpha(mask)
+            card.paste(thumbnail, (75, 75), thumbnail)
             draw = ImageDraw.Draw(card)
+            local_font_family = None
 
-            regular_plugin_font = File(temp_dir, f"{font_family}-Regular.ttf").getAbsolutePath()
-            bold_plugin_font = File(temp_dir, f"{font_family}-Bold.ttf").getAbsolutePath()
-            plugin_font = ImageFont.truetype(regular_plugin_font, 40)
-            not_active_font = ImageFont.truetype(bold_plugin_font, 80)
+            if re.findall(r"[А-Яа-яЁё]", track.title) and font_family == "Circular":
+                local_font_family = "Onest"
 
-            draw.text(
-                xy = (width // 2, 45),
-                text = __name__,
-                font=plugin_font,
-                fill=title_text_color,
-                align="center",
-                anchor="mm"
-            )
+            title_font_file = File(temp_dir, f"{local_font_family if local_font_family else font_family}-Bold.ttf")
+            title_font = ImageFont.truetype(title_font_file.getAbsolutePath(), 60)
 
-            draw.text(
-                xy = (width // 2, height // 2),
-                text = "player_not_active_text",
-                font=not_active_font,
-                fill=title_text_color,
-                align="center",
-                anchor="mm"
-            )
+            x, y = 590, 85
+            artists_plus_y = 0
+            lines = textwrap.wrap(track.title, width=21)
+
+            if len(lines) > 1:
+                lines[1] = lines[1] + "..." if len(lines) > 2 else lines[1]
+                artists_plus_y = 70
+            else:
+                pass
+
+            lines = lines[:2]
+
+            for line in lines:
+                draw.text((x, y), line, font=title_font, fill=title_text_color)
+                y += 70
+
+            local_font_family = None
+
+            if re.findall(r"[А-Яа-яЁё]", "".join(track.title)) and font_family == "Circular":
+                local_font_family = "Onest"
+
+            artist_font_file = File(temp_dir, f"{local_font_family if local_font_family else font_family}-Regular.ttf")
+            artist_font = ImageFont.truetype(artist_font_file.getAbsolutePath(), 40)
+            artists = textwrap.wrap(" • ".join(track.artist), width=32)
+            if len(artists) > 1:
+                if "•" in artists[0][-2:]:
+                    artists[0] = artists[0][:artists[0].rfind("•") - 1]
+                artists[0] = artists[0]
+            artists = artists[0]
+
+            draw.text((590, 170 + artists_plus_y), artists, subtext_color, font=artist_font)
+            if not (self.get_setting("fast_card_render", False)) and track.progress:
+                progress_bar_empty = Image.new('RGBA', (width - 665, 10), (0, 0, 0, 0))
+
+                progress_draw = ImageDraw.Draw(progress_bar_empty)
+                progress_draw.rounded_rectangle(
+                    xy = (0, 0, *progress_bar_empty.size),
+                    radius = 7,
+                    fill=subtext_color
+                )
+                progress_draw.rounded_rectangle(
+                    xy = (0, 0, progress_bar_empty.width * (track.progress / track.duration), 10),
+                    radius = 7,
+                    fill=title_text_color
+                )
+                card.paste(progress_bar_empty, (590, 460), progress_bar_empty)
+
+                timers_font_path = File(temp_dir, f"{font_family}-Regular.ttf").getAbsolutePath()
+                timers_font = ImageFont.truetype(timers_font_path, 30)
+
+                draw.text(
+                    xy = (590, 490),
+                    text = f"{datetime.datetime.fromtimestamp(track.progress).strftime('%M:%S')}",
+                    fill = subtext_color,
+                    font=timers_font,
+                    anchor="la"
+                )
+                draw.text(
+                    xy = (1365, 490),
+                    text = f"{datetime.datetime.fromtimestamp(track.duration).strftime('%M:%S')}",
+                    fill = subtext_color,
+                    font=timers_font,
+                    anchor="ra"
+                )
+            else:
+                local_font_family = None
+
+                if advanced_mode:
+                    subtext = self.get_setting("instant_subtext", "powered by")
+                    maintext = self.get_setting("instant_main_text", __name__)
+                else:
+                    subtext = "powered by"
+                    maintext = __name__
+
+                subtext = subtext[:26] + "..." if len(subtext) > 26 else subtext
+                maintext = maintext[:21] + "..." if len(maintext) > 21 else maintext
+
+                ru_flag_subtext = True if re.findall(r"[А-Яа-яЁё]", subtext) else False
+                ru_flag_maintext = True if re.findall(r"[А-Яа-яЁё]", maintext) else False
+
+                if ru_flag_subtext and font_family == "Circular":
+                    local_font_family = "Onest"
+
+                info_font_file = File(temp_dir, f"{local_font_family if local_font_family else font_family}-Regular.ttf")
+                info_font = ImageFont.truetype(info_font_file.getAbsolutePath(), 42)
+                local_font_family = None
+
+                if ru_flag_maintext and font_family == "Circular":
+                    local_font_family = "Onest"
+
+                device_font_file = File(temp_dir, f"{local_font_family if local_font_family else font_family}-Bold.ttf")
+                device_font = ImageFont.truetype(device_font_file.getAbsolutePath(), 52)
+
+                draw.text((590, 415), subtext, subtext_color, font=info_font, anchor="ls")
+                draw.text((590, 485), maintext, title_text_color, font=device_font, anchor="ls")
 
             filename = f"now_{__name__}.png"
             temp_photo_path = File(temp_dir, filename).getAbsolutePath()
             card.save(temp_photo_path)
+
             return temp_photo_path
-
-        background_setting = self.get_setting("background", 1)
-
-        thumb = requests.get(track.thumb, stream=True).raw
-        background = Image.open(thumb)
-        thumbnail = background.copy()
-
-        if background_setting == 0:
-            background = background.resize((width, width)).crop((0, (width - height) // 2, width, width)).filter(
-                ImageFilter.GaussianBlur(radius=14))
-            background = ImageEnhance.Brightness(background).enhance(0.3)
-            card = Image.new('RGB', (width, height), background_color)
-            card.paste(background, (0, 0))
-        elif not advanced_mode:
-            img = background.resize((16, 16), Resampling.LANCZOS)
-            pixels = img.load()
-            l_width, l_height = img.size
-
-            for y in range(l_height):
-                for x in range(l_width):
-                    if img.mode == 'L':
-                        r = pixels[x, y]
-                        r = math.pow(r / 255.0, 1 / 2.2) * 255.0
-                        pixels[x, y] = int(r)
-                    else:
-                        r, g, b = pixels[x, y][:3]
-                        r = math.pow(r / 255.0, 1 / 2.2) * 255.0
-                        g = math.pow(g / 255.0, 1 / 2.2) * 255.0
-                        b = math.pow(b / 255.0, 1 / 2.2) * 255.0
-                        if img.mode == 'RGB':
-                            pixels[x, y] = (int(r), int(g), int(b))
-                        elif img.mode == 'RGBA':
-                            a = pixels[x, y][3]
-                            pixels[x, y] = (int(r), int(g), int(b), a)
-
-            if img.mode == 'L':
-                img = img.convert('RGB')
-            elif img.mode == 'RGBA':
-                rgb_img = Image.new('RGB', img.size)
-                rgb_img.paste(img, mask=img.split()[3])
-                img = rgb_img
-
-            pixels = list(img.getdata())
-            i_width, i_height = img.size
-
-            if img.mode == 'RGB':
-                total_r, total_g, total_b = 0, 0, 0
-                darkness_index = 1.9
-                for r, g, b in pixels:
-                    total_r += int(r // darkness_index)
-                    total_g += int(g // darkness_index)
-                    total_b += int(b // darkness_index)
-                count = i_width * i_height
-                average = (total_r // count, total_g // count, total_b // count)
-            else:
-                total = sum(pixels)
-                average = (total // (i_width * i_height),) * 3
-            card = Image.new('RGB', (width, height), average)
-
-        else:
-            card = Image.new('RGB', (width, height), background_color)
-
-        thumbnail = thumbnail.resize((450, 450))
-        mask = Image.new('L', thumbnail.size, 0)
-        draw = ImageDraw.Draw(mask)
-        draw.rounded_rectangle((0, 0, *thumbnail.size), 30, fill=255)
-        thumbnail = thumbnail.copy()
-        thumbnail.putalpha(mask)
-        card.paste(thumbnail, (75, 75), thumbnail)
-        draw = ImageDraw.Draw(card)
-        local_font_family = None
-
-        if re.findall(r"[А-Яа-яЁё]", track.title) and font_family == "Circular":
-            local_font_family = "Onest"
-
-        title_font_file = File(temp_dir, f"{local_font_family if local_font_family else font_family}-Bold.ttf")
-        title_font = ImageFont.truetype(title_font_file.getAbsolutePath(), 60)
-
-        x, y = 590, 85
-        artists_plus_y = 0
-        lines = textwrap.wrap(track.title, width=21)
-
-        if len(lines) > 1:
-            lines[1] = lines[1] + "..." if len(lines) > 2 else lines[1]
-            artists_plus_y = 70
-        else:
-            pass
-
-        lines = lines[:2]
-
-        for line in lines:
-            draw.text((x, y), line, font=title_font, fill=title_text_color)
-            y += 70
-
-        local_font_family = None
-
-        if re.findall(r"[А-Яа-яЁё]", "".join(track.title)) and font_family == "Circular":
-            local_font_family = "Onest"
-
-        artist_font_file = File(temp_dir, f"{local_font_family if local_font_family else font_family}-Regular.ttf")
-        artist_font = ImageFont.truetype(artist_font_file.getAbsolutePath(), 40)
-        artists = textwrap.wrap(" • ".join(track.artist), width=32)
-        if len(artists) > 1:
-            if "•" in artists[0][-2:]:
-                artists[0] = artists[0][:artists[0].rfind("•") - 1]
-            artists[0] = artists[0]
-        artists = artists[0]
-
-        draw.text((590, 170 + artists_plus_y), artists, subtext_color, font=artist_font)
-        if not (self.get_setting("fast_card_render", False)) and track.progress:
-            progress_bar_empty = Image.new('RGBA', (width - 665, 10), (0, 0, 0, 0))
-
-            progress_draw = ImageDraw.Draw(progress_bar_empty)
-            progress_draw.rounded_rectangle(
-                xy = (0, 0, *progress_bar_empty.size),
-                radius = 7,
-                fill=subtext_color
+        except Exception as e:
+            import traceback
+            exc = traceback.format_exc()
+            show_error(
+                message=exc,
+                on_click=lambda: copy(exc),
+                button_text="cope"
             )
-            progress_draw.rounded_rectangle(
-                xy = (0, 0, progress_bar_empty.width * (track.progress / track.duration), 10),
-                radius = 7,
-                fill=title_text_color
-            )
-            card.paste(progress_bar_empty, (590, 460), progress_bar_empty)
-
-            timers_font_path = File(temp_dir, f"{font_family}-Regular.ttf").getAbsolutePath()
-            timers_font = ImageFont.truetype(timers_font_path, 30)
-
-            draw.text(
-                xy = (590, 490),
-                text = f"{datetime.datetime.fromtimestamp(track.progress).strftime('%M:%S')}",
-                fill = subtext_color,
-                font=timers_font,
-                anchor="la"
-            )
-            draw.text(
-                xy = (1365, 490),
-                text = f"{datetime.datetime.fromtimestamp(track.duration).strftime('%M:%S')}",
-                fill = subtext_color,
-                font=timers_font,
-                anchor="ra"
-            )
-        else:
-            local_font_family = None
-
-            if advanced_mode:
-                subtext = self.get_setting("instant_subtext", "powered by")
-                maintext = self.get_setting("instant_main_text", __name__)
-            else:
-                subtext = "powered by"
-                maintext = __name__
-
-            subtext = subtext[:26] + "..." if len(subtext) > 26 else subtext
-            maintext = maintext[:21] + "..." if len(maintext) > 21 else maintext
-
-            ru_flag_subtext = True if re.findall(r"[А-Яа-яЁё]", subtext) else False
-            ru_flag_maintext = True if re.findall(r"[А-Яа-яЁё]", maintext) else False
-
-            if ru_flag_subtext and font_family == "Circular":
-                local_font_family = "Onest"
-
-            info_font_file = File(temp_dir, f"{local_font_family if local_font_family else font_family}-Regular.ttf")
-            info_font = ImageFont.truetype(info_font_file.getAbsolutePath(), 42)
-            local_font_family = None
-
-            if ru_flag_maintext and font_family == "Circular":
-                local_font_family = "Onest"
-
-            device_font_file = File(temp_dir, f"{local_font_family if local_font_family else font_family}-Bold.ttf")
-            device_font = ImageFont.truetype(device_font_file.getAbsolutePath(), 52)
-
-            draw.text((590, 415), subtext, subtext_color, font=info_font, anchor="ls")
-            draw.text((590, 485), maintext, title_text_color, font=device_font, anchor="ls")
-
-        filename = f"now_{__name__}.png"
-        temp_photo_path = File(temp_dir, filename).getAbsolutePath()
-        card.save(temp_photo_path)
-
-        return temp_photo_path
+            return
 
     def is_hex_valid(self, new: str, variable_name: str):
         if not re.match("^#[A-Fa-f0-9]{6}$", new):
