@@ -58,18 +58,18 @@ from ui.alert import AlertDialogBuilder
 from ui.bulletin import BulletinHelper
 from ui.settings import Selector, Input, Divider, Header, Switch, Text
 
-from java.io import File
-from java.util import ArrayList, Locale
+from java.io import File # type: ignore
+from java.util import ArrayList, Locale # type: ignore
 
-from android.content import Intent
-from android.net import Uri
+from android.content import Intent # type: ignore
+from android.net import Uri # type: ignore
 
-from com.exteragram.messenger.plugins import PluginsController
-from com.exteragram.messenger.plugins.ui import PluginSettingsActivity
+from com.exteragram.messenger.plugins import PluginsController # type: ignore
+from com.exteragram.messenger.plugins.ui import PluginSettingsActivity # type: ignore
 
-from org.telegram.tgnet import TLRPC
-from org.telegram.tgnet.tl import TL_account
-from org.telegram.messenger import ApplicationLoader, R, AndroidUtilities, SendMessagesHelper
+from org.telegram.tgnet import TLRPC # type: ignore
+from org.telegram.tgnet.tl import TL_account # type: ignore
+from org.telegram.messenger import ApplicationLoader, R, AndroidUtilities, SendMessagesHelper # type: ignore
 
 __id__ = "reswag"
 __name__ = "reSwaga"
@@ -96,7 +96,7 @@ REMOTE_CONFIG: Dict[str, Any] = {}
 
 PLATFORMS_COUNT: int = 5
 
-DEFAULT_API_URL = "https://your.api.url"
+DEFAULT_API_URL: str = "https://your.api.url"
 DEFAULT_STREAM_STRING: str = "🎵 | {title} — {artists}"
 DEFAULT_VALUE: str = "platform value"
 DEFAULT_STREAM_TEXT: str = "🤙"
@@ -923,7 +923,7 @@ class VkMusic(BasePlatform):
             
             main_artists: list = t.get('main_artists', None)
             artists: list = [ma for ma in main_artists]
-            artists_names: list[str] = [a.get('name', 'Artist w/out name') for a in artists]
+            artists_names: List[str] = [a.get('name', 'Artist w/out name') for a in artists]
 
             album = t.get('album', None)
             thumbnail = album.get('thumb', None)
@@ -1348,7 +1348,7 @@ class ReSwagaPlugin(BasePlugin):
                         daemon=True
                     ).start()
 
-                elif (text == ".nowt" or text == ". nowt"):
+                elif text == ".nowt" or text == ". nowt":
                     if not self.platform.can_download_track:
                         show_info(locale.Check_Platform_DownloadNotAvailable)
                         return HookResult(strategy=HookStrategy.CANCEL)
@@ -1455,7 +1455,6 @@ class ReSwagaPlugin(BasePlugin):
         self.initialize_cached_platforms_values()
         cached_values = self.get_cached_values()
         values = [cl for cl in cached_values if cl == DEFAULT_VALUE]
-        show_info(cached_values)
         if len(values) == PLATFORMS_COUNT:
             self.save_platform_value(
                 self.get_setting("selected_platform", int(Platform.NotSelected.value[0])),
