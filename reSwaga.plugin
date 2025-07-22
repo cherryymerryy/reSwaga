@@ -69,7 +69,7 @@ from com.exteragram.messenger.plugins.ui import PluginSettingsActivity # type: i
 
 from org.telegram.tgnet import TLRPC # type: ignore
 from org.telegram.tgnet.tl import TL_account # type: ignore
-from org.telegram.messenger import ApplicationLoader, R, AndroidUtilities, SendMessagesHelper # type: ignore
+from org.telegram.messenger import ApplicationLoader, R, AndroidUtilities, SendMessagesHelper, MessageObject, MediaController # type: ignore
 
 __id__ = "reswag"
 __name__ = "reSwaga"
@@ -94,7 +94,9 @@ DOWNLOAD_URL: str = "https://raw.githubusercontent.com/cherryymerryy/reSwaga/mai
 REMOTE_CONFIG_URL: str = DOWNLOAD_URL + "config.json"
 REMOTE_CONFIG: Dict[str, Any] = {}
 
-PLATFORMS_COUNT: int = 5
+EMPTY_TRACK_COVER = DOWNLOAD_URL + 'resources/empty_cover.png'
+
+PLATFORMS_COUNT: int = 6
 
 DEFAULT_API_URL: str = "https://your.api.url"
 DEFAULT_STREAM_STRING: str = "🎵 | {title} — {artists}"
@@ -545,6 +547,7 @@ class Platform(Enum):
     YandexMusic = (2, locale.Platform_YandexMusic)
     SoundCloud = (3, 'SoundCloud')
     VkMusic = (4, locale.Platform_VkMusic)
+    TgMusic = (5, 'Telegram')
 
 
 class BasePlatform:
@@ -991,6 +994,54 @@ class VkMusic(BasePlatform):
         ]
 
 
+class TgMusic(BasePlatform):
+    def __init__(self, value):
+        super().__init__(value)
+
+    def get_track(self):
+        now_playing = MediaController.getInstance().getPlayingMessageObject()
+        if now_playing is None or MediaController.getInstance().isMessagePaused() or not now_playing.isMusic():
+            self.now_track = Track(active=False)
+            return Track(active=False)
+        
+        id = now_playing.messageOwner.id
+        title = now_playing.getMusicTitle()
+        author = now_playing.getMusicAuthor()
+
+        # pizdec govnishe
+        artwork = now_playing.getArtworkUrl(False)
+        req = requests.get(str(artwork).replace('athumb', 'https')).json()
+        results: Optional[List[Dict[str, str]]] = req.get('results', None)
+
+        if results is None or len(results) <= 0 or results[0] is None:
+            album = None
+            link = None
+            thumbnail = EMPTY_TRACK_COVER
+        else:
+            id = results[0].get('trackId', now_playing.messageOwner.id)
+            album = results[0].get('collectionViewUrl', None)
+            link = results[0].get('trackViewUrl', None)
+            artwork_url_100 = results[0].get('artworkUrl30', None)
+            thumbnail = str(artwork_url_100).replace('30x30bb', '600x600bb') if not artwork_url_100 is None else EMPTY_TRACK_COVER
+
+        duration = now_playing.getDuration()
+        progress = now_playing.audioProgressSec
+
+        track = Track(
+            active=True,
+            track_id=id,
+            title=title,
+            artist=[author],
+            album=album,
+            thumb=thumbnail,
+            duration=duration,
+            progress=progress,
+            link=link
+        )
+        self.now_track = track
+        return track
+
+
 def get_platform(platform: int) -> Platform:
     if platform == 0:
         return Platform.NotSelected
@@ -1002,8 +1053,27 @@ def get_platform(platform: int) -> Platform:
         return Platform.SoundCloud
     elif platform == 4:
         return Platform.VkMusic
+    elif platform == 5:
+        return Platform.TgMusic
     else:
         return Platform.NotSelected
+    
+
+def get_songlink(platform: int) -> str:
+    if platform == int(Platform.NotSelected.value[0]):
+        return 'sc'
+    elif platform == int(Platform.Spotify.value[0]):
+        return 's'
+    elif platform == int(Platform.YandexMusic.value[0]):
+        return 'ya'
+    elif platform == int(Platform.SoundCloud.value[0]):
+        return 'sc'
+    elif platform == int(Platform.VkMusic.value[0]):
+        return 'sc'
+    elif platform == int(Platform.TgMusic.value[0]):
+        return 'i'
+    else:
+        'sc'
 
 
 def copy(to_copy: str) -> bool:
@@ -1100,14 +1170,15 @@ class ReSwagaPlugin(BasePlugin):
         if selected_platform == int(Platform.NotSelected.value[0]):
             return settings
 
-        settings += [
-            Input(
-                key="value",
-                text=locale.Settings_Auth_Value_Text if self.platform.value_text is None else self.platform.value_text,
-                on_change=lambda _: self.update_platform_object(self.get_setting("selected_platform", 0), True),
-                icon="msg_pin_code"
-            ) if selected_platform != int(Platform.NotSelected.value[0]) else None
-        ]
+        if selected_platform != int(Platform.TgMusic.value[0]):
+            settings += [
+                Input(
+                    key="value",
+                    text=locale.Settings_Auth_Value_Text if self.platform.value_text is None else self.platform.value_text,
+                    on_change=lambda _: self.update_platform_object(self.get_setting("selected_platform", 0), True),
+                    icon="msg_pin_code"
+                ) if selected_platform != int(Platform.NotSelected.value[0]) and selected_platform != int(Platform.TgMusic.value[0]) else None
+            ]
 
         if self.platform.pre_auth_settings:
             pre_auth_settings = self.platform.create_pre_auth_settings(self)
@@ -1118,7 +1189,7 @@ class ReSwagaPlugin(BasePlugin):
                 ]
                 settings += pre_auth_settings
 
-        if not is_value_valid:
+        if not is_value_valid and selected_platform != int(Platform.TgMusic.value[0]):
             return settings
 
         advanced = self.get_setting('advanced_mode', False)
@@ -1169,7 +1240,7 @@ class ReSwagaPlugin(BasePlugin):
                     locale.Settings_PlatformLink_Item_3
                 ],
                 icon="msg_link2"
-            ),
+            ) if selected_platform != int(Platform.TgMusic.value[0]) else None,
             Switch(
                 key="songlink_link_include",
                 text=locale.Settings_SongLinkInclude_Text,
@@ -1435,6 +1506,8 @@ class ReSwagaPlugin(BasePlugin):
         value = str(self.get_setting("value", DEFAULT_VALUE))
         if platform == int(Platform.YandexMusic.value[0]):
             return not len(value) <= 4 and not value in ["", None, DEFAULT_VALUE]
+        elif platform == int(Platform.TgMusic.value[0]):
+            return True
         else:
             return not value in ["", None, DEFAULT_VALUE]
 
@@ -1565,45 +1638,43 @@ class ReSwagaPlugin(BasePlugin):
                 return
 
             platform = self.get_setting("selected_platform", 0)
+
             platform_link: int = self.get_setting("platform_link", 1)
+            platform_link_added: bool = False
+
             songlink: bool = self.get_setting("songlink_link_include", True)
-            caption = ""
+            songlink_added: bool = False
 
-            if any([platform_link != 0, songlink]):
-                caption = random.choice(["[🎵](5188621441926438751) | ", "[🎶](5188705588925702510) | "])
+            caption: str = ""
 
-            if platform_link and platform_link != 0:
+            if (platform_link and platform_link != 0) and platform != int(Platform.TgMusic.value[0]):
                 link = track.link if (platform_link == 1 or track is None) else track.album
                 caption += locale.Message_CaptionLink_Text.format(get_platform(platform).value[1], link)
+                platform_link_added = True
 
             if songlink and songlink != 0:
-                if platform_link != 0:
+                if platform_link_added:
                     caption += locale.Message_CaptionDivider
 
-                if platform == int(Platform.Spotify.value[0]):
-                    sl_platform = 's'
-                elif platform == int(Platform.YandexMusic.value[0]):
-                    sl_platform = 'ya'
-                elif platform == int(Platform.SoundCloud.value[0]):
-                    sl_platform = 'sc'
-                else:
-                    sl_platform = 'sc'
+                caption += locale.Message_CaptionSongLink_Text.format(f"https://song.link/{get_songlink(platform)}/{track.track_id}")
+                songlink_added = True
 
-                caption += locale.Message_CaptionSongLink_Text.format(
-                    f"https://song.link/{sl_platform}/{track.track_id}")
+            if any([platform_link_added, songlink_added]):
+                emoji: str = random.choice(["[🎵](5188621441926438751) | ", "[🎶](5188705588925702510) | "])
+                caption = emoji + caption
 
-            if any([platform_link != 0, songlink]):
-                caption = parse_markdown(caption)
-                params["caption"] = caption.text
+                parsed_caption = parse_markdown(caption)
+                params["caption"] = parsed_caption.text
                 params["entities"] = set()
-                for i in caption.entities:
+
+                for i in parsed_caption.entities:
                     params["entities"].add(i.to_tlrpc_object())
 
             run_on_ui_thread(lambda: send_message(params))
             run_on_ui_thread(lambda: self.dismiss_spinner())
         except Exception as e:
             import traceback
-            logcat(f"send_card_message: {e}\n\nFull traceback: {traceback.format_exc()}")
+            logcat(f'send_card_message: {traceback.format_exc()}')
 
     def send_audio_message(self, dialog_id, reply_to_msg, reply_to_top_msg):
         run_on_ui_thread(lambda: self.show_spinner())
@@ -1722,6 +1793,9 @@ class ReSwagaPlugin(BasePlugin):
 
         elif new_platform == int(Platform.VkMusic.value[0]):
             self.platform = VkMusic(token, self.get_setting('vk_music_id', None))
+
+        elif new_platform == int(Platform.TgMusic.value[0]):
+            self.platform = TgMusic(token)
 
         else:
             logcat(f"Unknown platform ({new_platform})")
