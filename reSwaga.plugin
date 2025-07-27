@@ -98,6 +98,7 @@ EMPTY_TRACK_COVER = DOWNLOAD_URL + 'resources/empty_cover.png'
 
 PLATFORMS_COUNT: int = 6
 
+DEFAULT_COBALT_API_URL: str = 'https://co.itsv1eds.ru'
 DEFAULT_API_URL: str = "https://your.api.url"
 DEFAULT_STREAM_STRING: str = "🎵 | {title} — {artists}"
 DEFAULT_VALUE: str = "platform value"
@@ -259,6 +260,9 @@ class LocaleController:
         Settings_YandexMusic_LoginGuide = "Перейдите к инструкции по получению токена, войдите в аккаунт Яндекса и вставьте токен ниже."
         Settings_VkMusic_LoginGuide = "Перейдите на сайт и изучите как нужно правильно получить токен, после изучения выберите 'vk.com'"
 
+        Settings_CobaltApi_Text = 'Cobalt API'
+        Settings_CobaltApi_Subtext = 'Просим не менять это значение если не знаете за что оно отвечает и зачем оно нужно.'
+
         Settings_CardSettings_Header = "Внешний вид"
 
         Settings_BackgroundMode_Text = "Фон"
@@ -377,6 +381,10 @@ class LocaleController:
         Alert_Donate_Text = "Ниже вы можете скопировать TON-адрес разработчиков reMusic и поддержать проект донатом."
         Alert_Donate_Button = "Скопировать"
 
+        Bulletin_InvalidCobaltResponse = "Некорректный ответ от Cobalt API"
+        Bulletin_NoItemsToDownload = "Нет элементов для загрузки"
+        Bulletin_CobaltErrorCode = "[reSpotify]: Ошибка Cobalt, код — {0}"
+
     class LanguageEnglish:
         language = "en"
 
@@ -390,6 +398,9 @@ class LocaleController:
 
         Settings_YandexMusic_LoginGuide = "Go to token guide, log in to your Yandex account, and paste your token below."
         Settings_VkMusic_LoginGuide = "Go to the website and learn how to get a token correctly. After studying, select 'vk.com' and log-in in to your VK account."
+
+        Settings_CobaltApi_Text = 'Cobalt API Url'
+        Settings_CobaltApi_Subtext = 'Please do not change this value if you do not know what it is responsible for and why it is needed.'
 
         Settings_CardSettings_Header = "Customization"
 
@@ -509,6 +520,10 @@ class LocaleController:
         Alert_Donate_Text = "Below you can copy the TON address of the reMusic developers and support the development with your donation."
         Alert_Donate_Button = "Copy"
 
+        Bulletin_InvalidCobaltResponse = "Invalid response from Cobalt API"
+        Bulletin_NoItemsToDownload = "No items to download"
+        Bulletin_CobaltErrorCode = "[reSpotify]: Cobalt Error Code — {0}"
+
 
 locale = LocaleController().get_controller()
 
@@ -554,7 +569,7 @@ class BasePlatform:
     def __init__(self, value: str):
         self.now_track: Optional[Track] = None
 
-        if value or self.value != "":
+        if value or not self.value in ['', None, DEFAULT_VALUE]:
             self.value: str = value
         else:
             logcat("Value is none.")
@@ -997,6 +1012,7 @@ class VkMusic(BasePlatform):
 class TgMusic(BasePlatform):
     def __init__(self, value):
         super().__init__(value)
+        self.can_download_track = False
 
     def get_track(self):
         now_playing = MediaController.getInstance().getPlayingMessageObject()
@@ -1021,8 +1037,8 @@ class TgMusic(BasePlatform):
             id = results[0].get('trackId', now_playing.messageOwner.id)
             album = results[0].get('collectionViewUrl', None)
             link = results[0].get('trackViewUrl', None)
-            artwork_url_100 = results[0].get('artworkUrl30', None)
-            thumbnail = str(artwork_url_100).replace('30x30bb', '600x600bb') if not artwork_url_100 is None else EMPTY_TRACK_COVER
+            artwork_url = results[0].get('artworkUrl30', None)
+            thumbnail = str(artwork_url).replace('30x30bb', '600x600bb') if not artwork_url is None else EMPTY_TRACK_COVER
 
         duration = now_playing.getDuration()
         progress = now_playing.audioProgressSec
@@ -1076,19 +1092,33 @@ def get_songlink(platform: int) -> str:
         'sc'
 
 
+def get_download_link(platform: int, track_id: int) -> Optional[str]:
+        songlink_codename = get_songlink(platform)
+        songlink = requests.get(f"https://song.link/{songlink_codename}/{track_id}")
+        if songlink.status_code == 200:
+            youtube_link = re.findall(r"(https://(www\.)?youtube.com/.+?=.+?\")", songlink.text)
+            soundcloud_link = re.findall(r"(https://(www\.)?soundcloud\.com/.+?\")", songlink.text)
+            if soundcloud_link or youtube_link:
+                return soundcloud_link[0][0][:-1] if soundcloud_link else youtube_link[0][0][:-1]
+            else:
+                return None
+        else:
+            return None
+
+
 def copy(to_copy: str) -> bool:
     return AndroidUtilities.addToClipboard(to_copy)
 
 
-def delete_file_delayed(path, delay=60):
+def delete_file_delayed(path: str, delay: int=60):
     def action():
         try:
             time.sleep(delay)
             if os.path.exists(path):
                 os.remove(path)
-                log(f"Deleted temp file: {path}")
+                logcat(f"Deleted temp file: {path}")
         except Exception as e:
-            log(f"Delayed delete error: {e}")
+            logcat(f"Delayed delete error: {e}")
 
     threading.Thread(target=action, daemon=True).start()
 
@@ -1209,6 +1239,13 @@ class ReSwagaPlugin(BasePlugin):
             Divider(),
 
             Header(text=locale.Settings_CardSettings_Header),
+            Input(
+                key='cobalt_api_url',
+                text=locale.Settings_CobaltApi_Text,
+                subtext=locale.Settings_CobaltApi_Subtext,
+                default=DEFAULT_COBALT_API_URL,
+                icon='msg_instant_link'
+            ),
             Selector(
                 key="background",
                 text=locale.Settings_BackgroundMode_Text,
@@ -1406,7 +1443,7 @@ class ReSwagaPlugin(BasePlugin):
     def on_send_message_hook(self, account: int, params: Any):
         if hasattr(params, 'message') and isinstance(params.message, str):
             text = str(params.message)
-            if text.startswith(".now"):
+            if text.startswith('.now') or text.startswith('. now'):
                 platform = self.get_setting("selected_platform", 0)
 
                 if self.is_args_not_valid(platform):
@@ -1483,24 +1520,6 @@ class ReSwagaPlugin(BasePlugin):
                 logcat(f"Unknown app event type : {event_type}")
         else:
             logcat("No need to enable/disable poller.")
-
-    def create_menu_items(self):
-        cache_enabled: bool = self.get_setting("enable_auth_data_cache", False)
-
-        if not cache_enabled:
-            return
-        
-        cached_values = self.get_cached_values()
-        for value in cached_values:
-            if value == DEFAULT_VALUE:
-                continue
-
-            item: MenuItemData = MenuItemData(
-                menu_type=MenuItemType.CHAT_ACTION_MENU,
-                text=Platform[cached_values.index(value)].value[1],
-                on_click=lambda: show_info("test")
-            )
-            self.add_menu_item(item)
 
     def is_platform_value_valid(self, platform: int) -> bool:
         value = str(self.get_setting("value", DEFAULT_VALUE))
@@ -1589,6 +1608,77 @@ class ReSwagaPlugin(BasePlugin):
                  return [DEFAULT_VALUE for _ in range(PLATFORMS_COUNT)]
         
         return exist_values
+
+    def download_track_with_cobalt(self, url: str, track: Track) -> Optional[str]:
+        api_url: str = self.get_setting('cobalt_api_url', DEFAULT_COBALT_API_URL)
+        payload: Dict[str, str] = { 
+            "url": url,
+            "downloadMode": "audio",
+            "audioBitrate": "320",
+            "audioFormat": "best"
+        }
+        headers: Dict[str, str] = {
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+
+        try:
+            response = requests.post(f"{api_url}/", json=payload, headers=headers, timeout=30)
+            response.raise_for_status()
+        except Exception as e:
+            run_on_ui_thread(lambda: self.dismiss_spinner())
+            BulletinHelper.show_error(locale.Bulletin_InvalidCobaltResponse)
+            logcat(f"Cobalt Error {e} | data = {payload}")
+            return None
+        
+        data = response.json()
+        status = data.get("status")
+
+        if status == "error":
+            code = data.get("error", {}).get("code", "Unknown error")
+            BulletinHelper.show_error(locale.Bulletin_CobaltErrorCode.format(code))
+            return None
+        
+        if status == "picker":
+            items = data.get("picker", [])
+            if not items:
+                BulletinHelper.show_error(locale.Bulletin_NoItemsToDownload)
+                return None
+            item = items[0]
+            direct_url = item.get("url")
+            filename = item.get("filename")
+        else:
+            direct_url = data.get("url")
+            filename = data.get("filename")
+
+        if not direct_url:
+            BulletinHelper.show_error(locale.Bulletin_InvalidCobaltResponse)
+            return None
+
+        filename = f"{track.title} (via {__name__}).{filename.split('.')[-1] if filename else 'mp4a'}"
+        file_path = File(self._temp_dir, filename).getAbsolutePath()
+
+        logcat(f"Downloading audio in background thread: {filename}")
+
+        try:
+            track_resp = requests.get(direct_url, stream=True, timeout=60)
+            track_resp.raise_for_status()
+        except Exception as e:
+            run_on_ui_thread(lambda: self.dismiss_spinner())
+            BulletinHelper.show_error(locale.Bulletin_InvalidCobaltResponse)
+            return None
+
+        with open(file_path, "wb") as f:
+            for chunk in track_resp.iter_content(chunk_size=8192):
+                f.write(chunk)
+
+        try:
+            size = os.path.getsize(file_path)
+            logcat(f"Downloaded audio: {filename}, size: {size}")
+        except Exception as dbg_e:
+            logcat(f"Download error: {dbg_e}")
+
+        return file_path
 
     def send_card_message(self, msg_params):
         try:
@@ -1690,55 +1780,74 @@ class ReSwagaPlugin(BasePlugin):
             return
 
         url = track.download_url
-        if not url:
-            run_on_ui_thread(lambda: self.dismiss_spinner())
-            BulletinHelper.show_error("No download link")
-            return
 
         try:
-            temp_dir = get_temp_dir()
-            temp_dir_name = "swaga_temp"
+            if not url is None:
+                temp_dir = get_temp_dir()
+                temp_dir_name = "swaga_temp"
 
-            ext = os.path.splitext(url)[1] or ".mp3"
-            filename = f"{track.title}{ext}"
-            file_path = File(temp_dir, filename).getAbsolutePath()
-            resp = requests.get(url, stream=True, timeout=60)
-            resp.raise_for_status()
+                ext = os.path.splitext(url)[1] or ".mp3"
+                filename = f"{track.title}{ext}"
+                file_path = File(temp_dir, filename).getAbsolutePath()
+                resp = requests.get(url, stream=True, timeout=60)
+                resp.raise_for_status()
 
-            with open(file_path, 'wb') as f:
-                for chunk in resp.iter_content(8192): f.write(chunk)
+                with open(file_path, 'wb') as f:
+                    for chunk in resp.iter_content(8192): f.write(chunk)
 
-            ext_root = ApplicationLoader.applicationContext.getExternalCacheDir()
-            plugin_dir = File(ext_root, temp_dir_name)
+                ext_root = ApplicationLoader.applicationContext.getExternalCacheDir()
+                plugin_dir = File(ext_root, temp_dir_name)
 
-            if not plugin_dir.exists() and not plugin_dir.mkdirs():
-                pass
+                if not plugin_dir.exists() and not plugin_dir.mkdirs():
+                    pass
 
-            ext_path = File(plugin_dir, File(file_path).getName()).getAbsolutePath()
+                ext_path = File(plugin_dir, File(file_path).getName()).getAbsolutePath()
 
-            with open(file_path, 'rb') as fin, open(ext_path, 'wb') as fout:
-                fout.write(fin.read())
+                with open(file_path, 'rb') as fin, open(ext_path, 'wb') as fout:
+                    fout.write(fin.read())
+            else:
+                new_url = get_download_link(
+                    platform=self.get_setting('selected_platform', int(Platform.NotSelected.value[0])),
+                    track_id=track.track_id
+                )
+
+                if new_url in ['', None]:
+                    run_on_ui_thread(lambda: self.dismiss_spinner())
+                    return
+                
+                ext_path = self.download_track_with_cobalt(new_url, track)
+                if ext_path in ['', None] or not os.path.exists(ext_path):
+                    run_on_ui_thread(lambda: self.dismiss_spinner())
+                    return
 
             account = get_account_instance()
             mime = "audio/mpeg"
-            caption = ""
             markdown_need = False
             platform = self.get_setting("selected_platform", 0)
-            platform_link = self.get_setting("platform_link", 1)
-            songlink = self.get_setting("songlink_link_include", True)
 
-            if any([platform_link != 0, songlink]):
-                markdown_need = True
-                caption = random.choice(["[🎵](5188621441926438751) | ", "[🎶](5188705588925702510) | "])
+            platform_link: int = self.get_setting("platform_link", 1)
+            platform_link_added: bool = False
 
-            if platform_link and platform_link != 0:
+            songlink: bool = self.get_setting("songlink_link_include", True)
+            songlink_added: bool = False
+
+            caption: str = ""
+
+            if (platform_link and platform_link != 0) and platform != int(Platform.TgMusic.value[0]):
                 link = track.link if (platform_link == 1 or track is None) else track.album
                 caption += locale.Message_CaptionLink_Text.format(get_platform(platform).value[1], link)
+                platform_link_added = True
 
             if songlink and songlink != 0:
-                if platform_link != 0:
+                if platform_link_added:
                     caption += locale.Message_CaptionDivider
-                caption += locale.Message_CaptionSongLink_Text.format(f"https://song.link/ya/{track.track_id}")
+
+                caption += locale.Message_CaptionSongLink_Text.format(f"https://song.link/{get_songlink(platform)}/{track.track_id}")
+                songlink_added = True
+
+            if any([platform_link_added, songlink_added]):
+                emoji: str = random.choice(["[🎵](5188621441926438751) | ", "[🎶](5188705588925702510) | "])
+                caption = emoji + caption
 
             SendMessagesHelper.prepareSendingDocument(
                 account,
@@ -1772,11 +1881,13 @@ class ReSwagaPlugin(BasePlugin):
         token = self.get_setting("value", DEFAULT_VALUE)
         token_default_values = ["", None, DEFAULT_VALUE]
 
-        if new_platform != int(Platform.NotSelected.value[0]):
-            if self.is_cached_value_exist(new_platform) and cache_enabled:
-                cached_value = self.get_cached_value(new_platform)
-                if cached_value != token:
-                    self.save_platform_value(new_platform, token)
+        if (not new_platform in [int(Platform.NotSelected.value[0]), int(Platform.TgMusic.value[0])]) and cache_enabled:
+            if self.is_cached_value_exist(new_platform):
+                self.initialize_cached_platforms_values()
+            
+            cached_value = self.get_cached_value(new_platform)
+            if not token in token_default_values and token != cached_value:
+                self.save_platform_value(new_platform, token)
 
         if new_platform == int(Platform.NotSelected.value[0]):
             self.platform = None
@@ -1998,7 +2109,7 @@ class ReSwagaPlugin(BasePlugin):
                 elif stream_bio_enabled and stream_place == 1:
                     sleep_time = 5
                 else:
-                    sleep_time = 5
+                    sleep_time = 10
 
                 if self.platform:
                     self.platform.get_track()
@@ -2088,7 +2199,11 @@ class ReSwagaPlugin(BasePlugin):
 
             background_setting = self.get_setting("background", 1)
 
-            thumb = requests.get(track.thumb, stream=True).raw
+            try:
+                thumb = requests.get(track.thumb, stream=True).raw
+            except:
+                thumb = requests.get(EMPTY_TRACK_COVER, stream=True).raw
+
             background = Image.open(thumb)
             thumbnail = background.copy()
 
