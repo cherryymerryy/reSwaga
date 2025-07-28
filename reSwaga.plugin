@@ -915,7 +915,7 @@ class VkMusic(BasePlatform):
         self.need_special_platform_args_check = True
 
     def get_track(self) -> Optional[Track]:
-        params: Dict[str, str|int] = {
+        params: Dict[str, Any] = {
             'user_ids': self.vk_id,
             'fields': 'status',
             'v': 5.199,
@@ -927,41 +927,56 @@ class VkMusic(BasePlatform):
             data = response.json()
 
             if data.get('response', None) is None:
+                logcat('Response not found')
                 return Track(active=False)
             
             response = data['response'][0]
 
             if response.get('status_audio', None) is None:
                 show_info(locale.VkMusic_Audio_NotFound)
+                logcat('Audio status not found')
                 return Track(active=False)
             
             t = response.get('status_audio', None)
             if t is None:
+                logcat('Audio status not found2')
                 return Track(active=False)
             
             main_artists: list = t.get('main_artists', None)
-            artists: list = [ma for ma in main_artists]
-            artists_names: List[str] = [a.get('name', 'Artist w/out name') for a in artists]
+            if main_artists is None:
+                artists_names: List[str] = [t.get('artist', 'Artist w/out name')]
+            else:
+                artists: list = [ma for ma in main_artists]
+                artists_names: List[str] = [a.get('name', 'Artist w/out name') for a in artists]
 
+            thumbnail = EMPTY_TRACK_COVER
+            link: str = f"https://vk.com/audio{t.get('owner_id', 0)}_{t.get('id', 0)}"
             album = t.get('album', None)
-            thumbnail = album.get('thumb', None)
+
+            if not album is None:
+                album_link: str = f"https://vk.com/music/album/{album.get('owner_id', 0)}_{album.get('id', 0)}_{album.get('access_key', None)}"
+                thumb = album.get('thumb', None)
+                if not thumb is None:
+                    thumbnail = thumb.get('photo_1200', None)
+            else:
+                album_link: str = link
 
             track = Track(
                 active=True,
                 track_id=t.get('id', 0),
                 title=t.get('title', 'No title provided'),
                 artist=artists_names,
-                album=f"https://vk.com/music/album/{album.get('owner_id', 0)}_{album.get('id', 0)}_{album.get('access_key', None)}",
-                thumb=thumbnail.get('photo_1200', None),
-                duration=t.get('duration', 0),
-                link=f"https://vk.com/audio{t.get('owner_id', 0)}_{t.get('id', 0)}"
+                album=album_link,
+                thumb=thumbnail,
+                link=link
             )
 
             self.now_track = track
             return track
         
         except Exception as e:
-            logcat(f"Exception occurred while getting VK status: {e}")
+            import traceback
+            logcat(f"Exception occurred while getting VK status: {e}\nFull traceback: {traceback.format_exc()}")
             return Track(active=False)
 
     def special_platform_args_check(self, plugin):
