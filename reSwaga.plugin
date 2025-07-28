@@ -74,7 +74,7 @@ from org.telegram.messenger import ApplicationLoader, R, AndroidUtilities, SendM
 __id__ = "reswag"
 __name__ = "reSwaga"
 __description__ = "Плагин для отправки карточки/аудио файла текущего трека для музыкальных сервисов."
-__icon__ = "remusic/0"
+__icon__ = "remusic/5"
 __version__ = "1.0.0"
 __author__ = "@meeowPlugins"
 __min_version__ = "11.12.1"
@@ -98,7 +98,7 @@ EMPTY_TRACK_COVER = DOWNLOAD_URL + 'resources/empty_cover.png'
 
 PLATFORMS_COUNT: int = 6
 
-DEFAULT_COBALT_API_URL: str = 'https://co.itsv1eds.ru'
+DEFAULT_COBALT_API_URL: str = 'https://co.otomir23.me'
 DEFAULT_API_URL: str = "https://your.api.url"
 DEFAULT_STREAM_STRING: str = "🎵 | {title} — {artists}"
 DEFAULT_VALUE: str = "platform value"
@@ -378,12 +378,17 @@ class LocaleController:
         Platform_VkMusic = "ВК Музыка"
 
         Alert_Donate_Title = "Поддержка разработки"
-        Alert_Donate_Text = "Ниже вы можете скопировать TON-адрес разработчиков reMusic и поддержать проект донатом."
+        Alert_Donate_Text = "Ниже вы можете скопировать TON-адрес разработчиков reSwaga и поддержать проект донатом."
         Alert_Donate_Button = "Скопировать"
 
         Bulletin_InvalidCobaltResponse = "Некорректный ответ от Cobalt API"
         Bulletin_NoItemsToDownload = "Нет элементов для загрузки"
-        Bulletin_CobaltErrorCode = "[reSpotify]: Ошибка Cobalt, код — {0}"
+        Bulletin_CobaltErrorCode = "[reSwaga]: Ошибка Cobalt, код — {0}"
+
+        MenuItem_Service_Select_Text = "Выбрать {0}"
+        MenuItem_Service_Select_Subtext = "Сервис в reSwaga"
+        MenuItem_Service_Success = "Сервис обновлен на {0}."
+        MenuItem_Service_Fail = "Не удалось обновить сервис на {0}."
 
     class LanguageEnglish:
         language = "en"
@@ -517,12 +522,17 @@ class LocaleController:
         Platform_VkMusic = "VK Music"
 
         Alert_Donate_Title = "Support Development"
-        Alert_Donate_Text = "Below you can copy the TON address of the reMusic developers and support the development with your donation."
+        Alert_Donate_Text = "Below you can copy the TON address of the reSwaga developers and support the development with your donation."
         Alert_Donate_Button = "Copy"
 
         Bulletin_InvalidCobaltResponse = "Invalid response from Cobalt API"
         Bulletin_NoItemsToDownload = "No items to download"
-        Bulletin_CobaltErrorCode = "[reSpotify]: Cobalt Error Code — {0}"
+        Bulletin_CobaltErrorCode = "[reSwaga]: Cobalt Error Code — {0}"
+
+        MenuItem_Service_Select_Text = "Select {0}"
+        MenuItem_Service_Select_Subtext = "Service in reSwaga"
+        MenuItem_Service_Success = "Selected {0} as main service."
+        MenuItem_Service_Fail = "Failed to select {0} as main service."
 
 
 locale = LocaleController().get_controller()
@@ -569,7 +579,7 @@ class BasePlatform:
     def __init__(self, value: str):
         self.now_track: Optional[Track] = None
 
-        if value or not self.value in ['', None, DEFAULT_VALUE]:
+        if value not in ['', None, DEFAULT_VALUE]:
             self.value: str = value
         else:
             logcat("Value is none.")
@@ -1035,7 +1045,7 @@ class TgMusic(BasePlatform):
             self.now_track = Track(active=False)
             return Track(active=False)
         
-        id = now_playing.messageOwner.id
+        owner_id = now_playing.messageOwner.id
         title = now_playing.getMusicTitle()
         author = now_playing.getMusicAuthor()
 
@@ -1049,7 +1059,7 @@ class TgMusic(BasePlatform):
             link = None
             thumbnail = EMPTY_TRACK_COVER
         else:
-            id = results[0].get('trackId', now_playing.messageOwner.id)
+            owner_id = results[0].get('trackId', now_playing.messageOwner.id)
             album = results[0].get('collectionViewUrl', None)
             link = results[0].get('trackViewUrl', None)
             artwork_url = results[0].get('artworkUrl30', None)
@@ -1060,7 +1070,7 @@ class TgMusic(BasePlatform):
 
         track = Track(
             active=True,
-            track_id=id,
+            track_id=owner_id,
             title=title,
             artist=[author],
             album=album,
@@ -1071,6 +1081,34 @@ class TgMusic(BasePlatform):
         )
         self.now_track = track
         return track
+
+
+def read(path: str) -> Optional[Any]:
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "rb") as file:
+            file_content = file.read()
+        return json.loads(file_content.decode("utf-8", errors="replace"))
+    except Exception:
+        import traceback
+        logcat(f"Failed to load data from {path}: {traceback.format_exc()}")
+        return None
+
+
+def write(path: str, content: Any):
+    try:
+        dir_name = os.path.dirname(path)
+        if not os.path.exists(dir_name):
+            os.makedirs(dir_name, exist_ok=True)
+
+        save_data = json.dumps(content, indent=4).encode("utf-8", errors="replace")
+        with open(path, "wb") as file:
+            file.write(save_data)
+    except PermissionError as e:
+        logcat(f"Have no permissions to edit {path}: {e}")
+    except Exception as e:
+        logcat(f"Failed to write data to {path}: {e}")
 
 
 def get_platform(platform: int) -> Platform:
@@ -1104,7 +1142,7 @@ def get_songlink(platform: int) -> str:
     elif platform == int(Platform.TgMusic.value[0]):
         return 'i'
     else:
-        'sc'
+        return 'sc'
 
 
 def get_download_link(platform: int, track_id: int) -> Optional[str]:
@@ -1138,56 +1176,131 @@ def delete_file_delayed(path: str, delay: int=60):
     threading.Thread(target=action, daemon=True).start()
 
 
+def _get_cache_file_path() -> Optional[str]:
+    temp_dir_obj = get_temp_dir()
+    if not temp_dir_obj:
+        logcat("Could not get base temp directory for cache.")
+        return None
+
+    swaga_dir_path = os.path.join(temp_dir_obj.getAbsolutePath(), "swaga_temp")
+    return os.path.join(swaga_dir_path, "cached_values.json")
+
+
+def initialize_cached_platforms_values() -> List[Optional[str]]:
+    empty_values = [DEFAULT_VALUE for _ in range(PLATFORMS_COUNT)]
+    path = _get_cache_file_path()
+    if path:
+        write(path, empty_values)
+        logcat("Cached values initialized in file.")
+    else:
+        logcat("Could not initialize cache file: path is invalid.")
+    return empty_values
+
+
+def is_cached_values_exist() -> bool:
+    path = _get_cache_file_path()
+    if not path:
+        return False
+
+    values_list = read(path)
+
+    return isinstance(values_list, list) and len(values_list) == PLATFORMS_COUNT
+
+
+def is_cached_value_exist(platform: int) -> bool:
+    cached_value = get_cached_values()[platform]
+    return cached_value is not None and cached_value != DEFAULT_VALUE
+
+
+def get_cached_values() -> List[Optional[str]]:
+    path = _get_cache_file_path()
+    if not path:
+        return [DEFAULT_VALUE for _ in range(PLATFORMS_COUNT)]
+
+    exist_values = read(path)
+
+    if not isinstance(exist_values, list) or len(exist_values) != PLATFORMS_COUNT:
+        logcat("Cached values are missing or corrupted, re-initializing.")
+        return initialize_cached_platforms_values()
+
+    return exist_values
+
+
+def get_cached_value(platform: int) -> Optional[str]:
+    return get_cached_values()[platform]
+
+
+def save_platform_value(platform: int, value: str):
+    path = _get_cache_file_path()
+    if not path:
+        show_error("Cannot save value: cache storage is unavailable.")
+        return
+
+    exist_values = get_cached_values()
+
+    if exist_values[platform] == value:
+        logcat(f"Value '{value}' at index {platform} is already set.")
+        return
+
+    exist_values[platform] = value
+    write(path, exist_values)
+
+    if is_cached_value_exist(platform):
+        show_success("New service value cached.")
+        logcat(f"Saved value '{value}' at index {platform}.")
+
+
 class ReSwagaPlugin(BasePlugin):
     def __init__(self):
         super().__init__()
-
-        if not self.enabled:
-            logcat("Plugin initialization canceled, because plugin disabled.")
-            return
 
         self.platform: Optional[BasePlatform] = None
         self.spinner: Optional[AlertDialogBuilder] = None
         self.info: Optional[AlertDialogBuilder] = None
         self.loading: Optional[AlertDialogBuilder] = None
-        self.poller_enabled: bool = None
+        self.poller_enabled: Optional[bool] = None
+        self.poller_lock: threading.Lock = threading.Lock()
 
     def on_plugin_load(self):
-        self.add_on_send_message_hook()
-        get_temp_dir()
-        
-        threading.Thread(target=self.check_resources, args=(False,)).start()
-        # threading.Thread(target=read_remote_config, daemon=True).start()
+        try:
+            self.add_on_send_message_hook()
+            get_temp_dir()
 
-        self.poller_enabled = any([
-            self.get_setting("stream_bio_enabled", False), 
-            self.get_setting("fast_card_render", False)
-        ])
+            threading.Thread(target=self.check_resources, args=(False,)).start()
+            # threading.Thread(target=read_remote_config, daemon=True).start()
 
-        if self.poller_enabled and self.enabled:
-            self.start_poller()
+            self.poller_enabled = any([
+                self.get_setting("stream_bio_enabled", False),
+                self.get_setting("fast_card_render", False)
+            ])
 
-        if self.get_setting("default_stream_text", DEFAULT_STREAM_TEXT) == DEFAULT_STREAM_TEXT:
-            self.save_default_user_bio()
+            current_platform = self.get_setting("selected_platform", 0)
+            if current_platform != int(Platform.NotSelected.value[0]):
+                self.update_platform_object(current_platform, True)
 
-        current_platform = self.get_setting("selected_platform", 0)
-        if current_platform != int(Platform.NotSelected.value[0]):
-            self.update_platform_object(current_platform, True)
+            if not self.poller_enabled and self.enabled and not self.platform is None:
+                self.start_poller()
 
-        if self.get_setting("enable_auth_data_cache", False):
-            if not self.is_cached_values_exist():
-                self.initialize_cached_platforms_values()
-            else:
-                if current_platform != int(Platform.NotSelected.value[0]):
-                    cached_value = self.get_cached_value(current_platform)
-                    current_value = self.get_setting("value", DEFAULT_VALUE)
+            if self.get_setting("default_stream_text", DEFAULT_STREAM_TEXT) == DEFAULT_STREAM_TEXT:
+                self.save_default_user_bio()
 
-                    if cached_value != current_value:
-                        self.save_platform_value(current_platform, current_value)
-            
-        # self.create_menu_items()
+            if self.get_setting("enable_auth_data_cache", False):
+                if not is_cached_values_exist():
+                    initialize_cached_platforms_values()
+                else:
+                    if current_platform != int(Platform.NotSelected.value[0]):
+                        cached_value = get_cached_value(current_platform)
+                        current_value = self.get_setting("value", DEFAULT_VALUE)
 
-        logcat(f"Plugin loaded.")
+                        if cached_value != current_value:
+                            save_platform_value(current_platform, current_value)
+
+            self.set_menu_items(False)
+
+            logcat(f"Plugin loaded.")
+        except Exception as e:
+            import traceback
+            logcat(traceback.format_exc())
 
     def on_plugin_unload(self):
         if self.poller_enabled:
@@ -1455,6 +1568,40 @@ class ReSwagaPlugin(BasePlugin):
             ),
         ]
 
+    def set_menu_items(self, remove: bool):
+        def on_menu_item_click(new_platform: int):
+            self.set_menu_items(True)
+            self.set_setting('selected_platform', new_platform)
+            platform: Platform = get_platform(new_platform)
+
+            if self.get_setting('selected_platform', int(Platform.NotSelected.value[0])) == new_platform:
+                self.update_platform_object(new_platform, False)
+                self.set_menu_items(False)
+                show_success(locale.MenuItem_Service_Success.format(platform.value[1]))
+            else:
+                show_error(locale.MenuItem_Service_Fail.format(pl.value[1]))
+
+        selected_platform = self.get_setting('selected_platform', int(Platform.NotSelected.value[0]))
+        platforms = [p for p in Platform if p.value[0] != selected_platform and p.value[0] != int(Platform.NotSelected.value[0])]
+
+        for pl in platforms:
+            cleared_item_name: str = str(pl.value[1]).lower().strip().replace(" ", "").replace(".", "")
+            item_id: str = f'{cleared_item_name}-{pl.value[0]}'
+
+            if remove:
+                self.remove_menu_item(item_id)
+            else:
+                self.add_menu_item(
+                    menu_item_data=MenuItemData(
+                        menu_type=MenuItemType.CHAT_ACTION_MENU,
+                        item_id=item_id,
+                        icon='msg_tone_on',
+                        text=locale.MenuItem_Service_Select_Text.format(pl.value[1]),
+                        subtext=locale.MenuItem_Service_Select_Subtext,
+                        on_click=lambda _, p=pl: on_menu_item_click(int(p.value[0]))
+                    )
+                )
+
     def on_send_message_hook(self, account: int, params: Any):
         if hasattr(params, 'message') and isinstance(params.message, str):
             text = str(params.message)
@@ -1523,18 +1670,11 @@ class ReSwagaPlugin(BasePlugin):
             return HookResult(strategy=HookStrategy.DEFAULT)
 
     def on_app_event(self, event_type: AppEvent):
-        stream_bio_enabled: bool = self.get_setting("stream_bio_enabled", False)
-        fast_card_render: bool = self.get_setting("fast_card_render", False)
-
-        if any([stream_bio_enabled, fast_card_render]):
+        if any([self.get_setting("stream_bio_enabled", False), self.get_setting("fast_card_render", False)]):
             if event_type in [AppEvent.PAUSE, AppEvent.STOP]:
                 self.stop_poller()
             elif event_type in [AppEvent.RESUME, AppEvent.START]:
                 self.start_poller()
-            else:
-                logcat(f"Unknown app event type : {event_type}")
-        else:
-            logcat("No need to enable/disable poller.")
 
     def is_platform_value_valid(self, platform: int) -> bool:
         value = str(self.get_setting("value", DEFAULT_VALUE))
@@ -1545,25 +1685,20 @@ class ReSwagaPlugin(BasePlugin):
         else:
             return not value in ["", None, DEFAULT_VALUE]
 
-    def initialize_cached_platforms_values(self):
-        empty_values = [DEFAULT_VALUE for _ in range(PLATFORMS_COUNT)]
-        self.set_setting("cached_values", json.dumps(empty_values))
-        logcat("Cached values initialized.")
-    
     def update_cache(self, new_value: bool):
-        self.initialize_cached_platforms_values()
+        initialize_cached_platforms_values()
         if new_value:
-            self.save_platform_value(
+            save_platform_value(
                 self.get_setting("selected_platform", int(Platform.NotSelected.value[0])),
                 self.get_setting("value", DEFAULT_VALUE)
             )
 
     def clear_cached_platforms_values(self):
-        self.initialize_cached_platforms_values()
-        cached_values = self.get_cached_values()
+        initialize_cached_platforms_values()
+        cached_values = get_cached_values()
         values = [cl for cl in cached_values if cl == DEFAULT_VALUE]
         if len(values) == PLATFORMS_COUNT:
-            self.save_platform_value(
+            save_platform_value(
                 self.get_setting("selected_platform", int(Platform.NotSelected.value[0])),
                 self.get_setting("value", DEFAULT_VALUE)
             )
@@ -1571,62 +1706,10 @@ class ReSwagaPlugin(BasePlugin):
         else:
             show_error(locale.CachedAuthData_Clear_Error)
 
-    def save_platform_value(self, platform: int, value: str):
-        exist_values = self.get_cached_values()
-
-        if exist_values[platform] == value:
-            logcat(f"Value '{value}' at index {platform} is already set.")
-            return
-        
-        exist_values[platform] = value
-        self.set_setting("cached_values", json.dumps(exist_values))
-        
-        if self.is_cached_value_exist(platform):
-            show_success("New service value cached.")
-            logcat(f"Saved value '{value}' at index {platform}.")
-    
-    def is_cached_values_exist(self) -> bool:
-        raw_values = self.get_setting("cached_values", None)
-        if not isinstance(raw_values, str):
-            return False
-        
-        try:
-            values_list = json.loads(raw_values)
-            return isinstance(values_list, list) and len(values_list) == PLATFORMS_COUNT
-        except json.JSONDecodeError:
-            return False
-
-    def is_cached_value_exist(self, platform: int) -> bool:
-        cached_value = self.get_cached_values()[platform]
-        return cached_value is not None and cached_value != DEFAULT_VALUE
-
-    def get_cached_value(self, platform: int) -> Optional[str]:
-        return self.get_cached_values()[platform]
-
-    def get_cached_values(self) -> List[Optional[str]]:
-        raw_values = self.get_setting("cached_values", None)
-        exist_values = None
-
-        if isinstance(raw_values, str):
-            try:
-                exist_values = json.loads(raw_values)
-            except json.JSONDecodeError:
-                logcat("Cached values are corrupted, re-initializing.")
-                exist_values = None
-
-        if not isinstance(exist_values, list) or len(exist_values) != PLATFORMS_COUNT:
-            self.initialize_cached_platforms_values()
-            raw_values = self.get_setting("cached_values", None)
-            if isinstance(raw_values, str):
-                 exist_values = json.loads(raw_values)
-            else:
-                 return [DEFAULT_VALUE for _ in range(PLATFORMS_COUNT)]
-        
-        return exist_values
-
     def download_track_with_cobalt(self, url: str, track: Track) -> Optional[str]:
         api_url: str = self.get_setting('cobalt_api_url', DEFAULT_COBALT_API_URL)
-        payload: Dict[str, str] = { 
+        temp_dir = get_temp_dir()
+        payload: Dict[str, str] = {
             "url": url,
             "downloadMode": "audio",
             "audioBitrate": "320",
@@ -1638,62 +1721,76 @@ class ReSwagaPlugin(BasePlugin):
         }
 
         try:
-            response = requests.post(f"{api_url}/", json=payload, headers=headers, timeout=30)
-            response.raise_for_status()
-        except Exception as e:
-            run_on_ui_thread(lambda: self.dismiss_spinner())
-            BulletinHelper.show_error(locale.Bulletin_InvalidCobaltResponse)
-            logcat(f"Cobalt Error {e} | data = {payload}")
-            return None
-        
-        data = response.json()
-        status = data.get("status")
-
-        if status == "error":
-            code = data.get("error", {}).get("code", "Unknown error")
-            BulletinHelper.show_error(locale.Bulletin_CobaltErrorCode.format(code))
-            return None
-        
-        if status == "picker":
-            items = data.get("picker", [])
-            if not items:
-                BulletinHelper.show_error(locale.Bulletin_NoItemsToDownload)
+            try:
+                response = requests.post(f"{api_url}/", json=payload, headers=headers, timeout=30)
+                response.raise_for_status()
+            except Exception as e:
+                run_on_ui_thread(lambda: self.dismiss_spinner())
+                BulletinHelper.show_error(locale.Bulletin_InvalidCobaltResponse)
+                logcat(f"Cobalt Request Error: {e} | data = {payload}")
                 return None
-            item = items[0]
-            direct_url = item.get("url")
-            filename = item.get("filename")
-        else:
-            direct_url = data.get("url")
-            filename = data.get("filename")
 
-        if not direct_url:
-            BulletinHelper.show_error(locale.Bulletin_InvalidCobaltResponse)
-            return None
+            data = response.json()
+            logcat(f"Cobalt Response Data: {data}")
 
-        filename = f"{track.title} (via {__name__}).{filename.split('.')[-1] if filename else 'mp4a'}"
-        file_path = File(self._temp_dir, filename).getAbsolutePath()
+            status = data.get("status")
 
-        logcat(f"Downloading audio in background thread: {filename}")
+            if status == "error":
+                code = data.get("error", {}).get("code", "Unknown error")
+                BulletinHelper.show_error(locale.Bulletin_CobaltErrorCode.format(code))
+                return None
 
-        try:
-            track_resp = requests.get(direct_url, stream=True, timeout=60)
-            track_resp.raise_for_status()
-        except Exception as e:
-            run_on_ui_thread(lambda: self.dismiss_spinner())
-            BulletinHelper.show_error(locale.Bulletin_InvalidCobaltResponse)
-            return None
+            elif status == "picker":
+                items = data.get("picker", [])
+                if not items:
+                    BulletinHelper.show_error(locale.Bulletin_NoItemsToDownload)
+                    return None
+                item = items[0]
+                direct_url = item.get("url")
+                original_filename = item.get("filename")
 
-        with open(file_path, "wb") as f:
-            for chunk in track_resp.iter_content(chunk_size=8192):
-                f.write(chunk)
+            elif status in ["stream", "redirect", "success"]:
+                direct_url = data.get("url")
+                original_filename = data.get("filename")
 
-        try:
-            size = os.path.getsize(file_path)
-            logcat(f"Downloaded audio: {filename}, size: {size}")
-        except Exception as dbg_e:
-            logcat(f"Download error: {dbg_e}")
+            else:
+                logcat(f"Cobalt Warning: Received an unhandled status: '{status}'")
+                BulletinHelper.show_error(locale.Bulletin_InvalidCobaltResponse)
+                return None
 
-        return file_path
+            if not direct_url:
+                BulletinHelper.show_error(locale.Bulletin_InvalidCobaltResponse)
+                return None
+
+            file_extension = original_filename.split('.')[-1] if original_filename and '.' in original_filename else 'mp3'
+            filename: str = f"{track.title} (via {__name__}).{file_extension}"
+            file_path: str = File(temp_dir, filename).getAbsolutePath()
+
+            logcat(f"Downloading audio in background thread: {filename}")
+
+            try:
+                track_resp = requests.get(direct_url, stream=True, timeout=60)
+                track_resp.raise_for_status()
+            except Exception as e:
+                run_on_ui_thread(lambda: self.dismiss_spinner())
+                logcat(f"Cobalt Download Error: {e}")
+                BulletinHelper.show_error(locale.Bulletin_InvalidCobaltResponse)
+                return None
+
+            with open(file_path, "wb") as f:
+                for chunk in track_resp.iter_content(chunk_size=8192):
+                    f.write(chunk)
+
+            try:
+                size = os.path.getsize(file_path)
+                logcat(f"Downloaded audio: {filename}, size: {size}")
+            except Exception as dbg_e:
+                logcat(f"Download error: {dbg_e}")
+
+            return file_path
+        except Exception as _:
+            import traceback
+            logcat(traceback.format_exc())
 
     def send_card_message(self, msg_params):
         try:
@@ -1710,10 +1807,12 @@ class ReSwagaPlugin(BasePlugin):
 
             if track is None:
                 run_on_ui_thread(lambda: self.dismiss_spinner())
+                show_error(locale.Track_Not_Active)
                 return
 
             if not track.active:
                 run_on_ui_thread(lambda: self.dismiss_spinner())
+                show_error(locale.Track_Not_Active)
                 return
 
             temp_dir = get_temp_dir()
@@ -1725,12 +1824,14 @@ class ReSwagaPlugin(BasePlugin):
 
             if temp_file_path in ["", None]:
                 run_on_ui_thread(lambda: self.dismiss_spinner())
+                show_error(locale.Track_Not_Active)
                 return
 
             generated_photo = get_send_messages_helper().generatePhotoSizes(temp_file_path, None)
 
             if generated_photo is None:
                 run_on_ui_thread(lambda: self.dismiss_spinner())
+                show_error(locale.Track_Not_Active)
                 return
 
             params["photo"] = generated_photo
@@ -1740,6 +1841,7 @@ class ReSwagaPlugin(BasePlugin):
 
             if not track.active:
                 run_on_ui_thread(lambda: self.dismiss_spinner())
+                show_error(locale.Track_Not_Active)
                 return
 
             platform = self.get_setting("selected_platform", 0)
@@ -1777,7 +1879,9 @@ class ReSwagaPlugin(BasePlugin):
 
             run_on_ui_thread(lambda: send_message(params))
             run_on_ui_thread(lambda: self.dismiss_spinner())
-        except Exception as e:
+        except Exception as _:
+            run_on_ui_thread(lambda: self.dismiss_spinner())
+            show_error(locale.Track_Not_Active)
             import traceback
             logcat(f'send_card_message: {traceback.format_exc()}')
 
@@ -1808,7 +1912,8 @@ class ReSwagaPlugin(BasePlugin):
                 resp.raise_for_status()
 
                 with open(file_path, 'wb') as f:
-                    for chunk in resp.iter_content(8192): f.write(chunk)
+                    for chunk in resp.iter_content(8192):
+                        f.write(chunk)
 
                 ext_root = ApplicationLoader.applicationContext.getExternalCacheDir()
                 plugin_dir = File(ext_root, temp_dir_name)
@@ -1820,6 +1925,8 @@ class ReSwagaPlugin(BasePlugin):
 
                 with open(file_path, 'rb') as fin, open(ext_path, 'wb') as fout:
                     fout.write(fin.read())
+
+                delete_file_delayed(file_path)
             else:
                 new_url = get_download_link(
                     platform=self.get_setting('selected_platform', int(Platform.NotSelected.value[0])),
@@ -1878,31 +1985,27 @@ class ReSwagaPlugin(BasePlugin):
             )
 
             run_on_ui_thread(lambda: self.dismiss_spinner())
-            delete_file_delayed(file_path)
             delete_file_delayed(ext_path)
-        except Exception as e:
+        except Exception as _:
             run_on_ui_thread(lambda: self.dismiss_spinner())
-            show_error(str(e))
+            show_error(locale.Track_Not_Active)
 
     def update_platform_object(self, new_platform: int, value: bool):
         cache_enabled: bool = self.get_setting("enable_auth_data_cache", False)
 
         if not value:
-            if self.is_cached_value_exist(new_platform) and cache_enabled:
-                self.set_setting("value", self.get_cached_value(new_platform))
+            if cache_enabled and is_cached_value_exist(new_platform):
+                self.set_setting("value", get_cached_value(new_platform))
             else:
                 self.set_setting("value", DEFAULT_VALUE)
 
         token = self.get_setting("value", DEFAULT_VALUE)
         token_default_values = ["", None, DEFAULT_VALUE]
 
-        if (not new_platform in [int(Platform.NotSelected.value[0]), int(Platform.TgMusic.value[0])]) and cache_enabled:
-            if self.is_cached_value_exist(new_platform):
-                self.initialize_cached_platforms_values()
-            
-            cached_value = self.get_cached_value(new_platform)
-            if not token in token_default_values and token != cached_value:
-                self.save_platform_value(new_platform, token)
+        if cache_enabled and (not new_platform in [int(Platform.NotSelected.value[0]), int(Platform.TgMusic.value[0])]):
+            cached_value = get_cached_value(new_platform)
+            if token not in token_default_values and token != cached_value:
+                save_platform_value(new_platform, token)
 
         if new_platform == int(Platform.NotSelected.value[0]):
             self.platform = None
@@ -1926,6 +2029,8 @@ class ReSwagaPlugin(BasePlugin):
         else:
             logcat(f"Unknown platform ({new_platform})")
 
+        self.stop_poller()
+
         if self.get_setting("default_stream_text", DEFAULT_STREAM_TEXT) == DEFAULT_STREAM_TEXT:
             self.save_default_user_bio()
 
@@ -1936,7 +2041,7 @@ class ReSwagaPlugin(BasePlugin):
 
         if token in token_default_values:
             self.stop_poller()
-        elif not token in token_default_values and any([stream_bio_enabled, fast_card_render]):
+        elif token not in token_default_values and any([stream_bio_enabled, fast_card_render]):
             self.start_poller()
         else:
             logcat("Unknown token state, can't do anything")
@@ -1974,11 +2079,10 @@ class ReSwagaPlugin(BasePlugin):
 
     def set_fast_card_render_enabled(self, enable: bool):
         if enable:
-            if self.poller_enabled:
-                logcat("Poller already enabled, no need to enable")
-                return
-            else:
-                self.start_poller()
+            self.start_poller()
+        else:
+            if not self.get_setting("stream_bio_enabled", False):
+                self.stop_poller()
 
     def save_default_user_bio(self):
         stream_place = self.get_setting("stream_place", 0)
@@ -2009,14 +2113,13 @@ class ReSwagaPlugin(BasePlugin):
 
     def set_stream_bio_enabled(self, enable: bool):
         if enable:
-            if not self.poller_enabled:
-                logcat("Poller is disabled, starting...")
-                self.start_poller()
-
+            self.start_poller()
             self.save_default_user_bio()
             self.set_stream_text(False)
         else:
             self.set_stream_text(True)
+            if not self.get_setting("fast_card_render", False):
+                self.stop_poller()
 
     def set_stream_text(self, default: bool):
         stream_place = self.get_setting("stream_place", 0)
@@ -2114,8 +2217,7 @@ class ReSwagaPlugin(BasePlugin):
 
                 if not any([stream_bio_enabled, fast_card_render]):
                     logcat("Stream Bio and Fast Card Render is disabled, stopping poller...")
-                    self.stop_poller()
-                    return
+                    break
 
                 stream_place = self.get_setting("stream_place", 0)
 
@@ -2141,23 +2243,34 @@ class ReSwagaPlugin(BasePlugin):
                             logcat("MemoryID equals with Current trackID, no need to make new card.")
                 else:
                     logcat("Platform is None, stopping poller...")
-                    self.stop_poller()
                     return
 
                 time.sleep(sleep_time)
+
+            self.stop_poller()
         except Exception as e:
             logcat(f"poller exception: {e}")
 
     def start_poller(self):
-        self.poller_enabled = True
-        threading.Thread(target=self.poller, daemon=True).start()
-        logcat("Poller started.")
+        with self.poller_lock:
+            if self.poller_enabled:
+                logcat("Poller is already enabled.")
+                return
+
+            self.poller_enabled = True
+            threading.Thread(target=self.poller, daemon=True).start()
+            logcat("Poller started.")
 
     def stop_poller(self):
-        self.poller_enabled = False
+        with self.poller_lock:
+            if not self.poller_enabled:
+                return
+
+            self.poller_enabled = False
+            logcat("Poller disabled. It will stop after the current cycle.")
+
         if self.get_setting("stream_bio_enabled", False):
             self.set_stream_text(True)
-        logcat("Poller disabled.")
 
     def _make_card(self):
         try:
@@ -2394,14 +2507,9 @@ class ReSwagaPlugin(BasePlugin):
             card.save(temp_photo_path)
 
             return temp_photo_path
-        except Exception as e:
+        except Exception as _:
             import traceback
-            exc = traceback.format_exc()
-            show_error(
-                message=exc,
-                on_click=lambda: copy(exc),
-                button_text="cope"
-            )
+            logcat(f'Failed generate card: {traceback.format_exc()}')
             return
 
     def is_hex_valid(self, new: str, variable_name: str):
