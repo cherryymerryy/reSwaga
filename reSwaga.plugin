@@ -50,9 +50,24 @@ from typing import Optional, Any, Callable, List, Dict
 from secrets import choice
 
 from android_utils import log, run_on_ui_thread
-from base_plugin import BasePlugin, HookResult, HookStrategy, AppEvent, MenuItemData, MenuItemType
-from client_utils import get_last_fragment, get_user_config, get_send_messages_helper, send_message, \
-    get_messages_controller, send_request, get_messages_storage, get_account_instance
+from base_plugin import (
+    BasePlugin,
+    HookResult,
+    HookStrategy,
+    AppEvent,
+    MenuItemData,
+    MenuItemType
+)
+from client_utils import (
+    get_last_fragment,
+    get_user_config,
+    get_send_messages_helper,
+    send_message,
+    get_messages_controller,
+    send_request,
+    get_messages_storage,
+    get_account_instance
+)
 from markdown_utils import parse_markdown
 from ui.alert import AlertDialogBuilder
 from ui.bulletin import BulletinHelper
@@ -79,6 +94,7 @@ __version__ = "1.0.0"
 __author__ = "@meeowPlugins"
 __min_version__ = "11.12.1"
 
+TEMP_DIR_NAME: str = 'swaga_temp'
 RESOURCE_DIR_NAME: str = "resources"
 RESOURCES: List[str] = [
     "Onest-Regular.ttf",
@@ -87,18 +103,22 @@ RESOURCES: List[str] = [
     "NotoSansJP-Regular.ttf",
     "NotoSansJP-Bold.ttf",
     "Circular-Regular.ttf",
-    "Circular-Bold.ttf"
+    "Circular-Bold.ttf",
+    "YSMusic-Bold.ttf",
+    "YSMusic-Regular.ttf",
+    "YSText-Bold.ttf",
+    "YSText-Regular.ttf",
 ]
 
 DOWNLOAD_URL: str = "https://raw.githubusercontent.com/cherryymerryy/reSwaga/main/"
 REMOTE_CONFIG_URL: str = DOWNLOAD_URL + "config.json"
 REMOTE_CONFIG: Dict[str, Any] = {}
 
-EMPTY_TRACK_COVER = DOWNLOAD_URL + 'resources/empty_cover.png'
+EMPTY_TRACK_COVER: str = DOWNLOAD_URL + 'resources/img/empty_cover.png'
 
 PLATFORMS_COUNT: int = 6
 
-DEFAULT_COBALT_API_URL: str = 'https://co.otomir23.me'
+DEFAULT_COBALT_API_URL: str = 'https://cobalt.255x.ru'
 DEFAULT_API_URL: str = "https://your.api.url"
 DEFAULT_STREAM_STRING: str = "🎵 | {title} — {artists}"
 DEFAULT_VALUE: str = "platform value"
@@ -109,13 +129,21 @@ DEFAULT_INSTANT_MAIN_TEXT: str = __name__
 FONTS: Dict[int, str] = {
     0: "Onest",
     1: "Circular",
-    2: "NotoSansJP"
+    2: "NotoSansJP",
+    3: "YSMusic",
+    4: "YSText"
 }
 DEFAULT_COLOR: Dict[str, str] = {
     "background_color": "#000000",
     "title_text_color": "#FFFFFF",
     "subtext_color": "#A0A0A0"
 }
+COBALT_API_URLS = [
+    'Custom',
+    DEFAULT_COBALT_API_URL,
+    "https://co.eepy.today",
+    "https://co.otomir23.me",
+]
 
 
 def logcat(message: Any):
@@ -262,6 +290,7 @@ class LocaleController:
 
         Settings_CobaltApi_Text = 'Cobalt API'
         Settings_CobaltApi_Subtext = 'Просим не менять это значение если не знаете за что оно отвечает и зачем оно нужно.'
+        Settings_CobaltApi_Custom_Text = 'Кастомный Cobalt API'
 
         Settings_CardSettings_Header = "Внешний вид"
 
@@ -372,22 +401,26 @@ class LocaleController:
         VkMusic_Audio_NotFound = "Трек не найден."
         VkMusic_Warning = "❗❗❗Внимание❗❗❗\nСервис ВК Музыка будет работать только если у вас ВК включена трансляция трека в ваш профиль."
 
+        SoundCloud_Warning = "❗❗❗Внимание❗❗❗\nСервис SoundCloud будет работать только с включенным ВПН (если вы находитесь в России)."
+
         Action_Fix = "Исправить"
 
         Platform_YandexMusic = "Яндекс Музыка"
         Platform_VkMusic = "ВК Музыка"
 
+        Alert_Donate_Header = "Донат"
         Alert_Donate_Title = "Поддержка разработки"
         Alert_Donate_Text = "Ниже вы можете скопировать TON-адрес разработчиков reSwaga и поддержать проект донатом."
         Alert_Donate_Button = "Скопировать"
 
         Bulletin_InvalidCobaltResponse = "Некорректный ответ от Cobalt API"
         Bulletin_NoItemsToDownload = "Нет элементов для загрузки"
-        Bulletin_CobaltErrorCode = "[reSwaga]: Ошибка Cobalt, код — {0}"
+        Bulletin_CobaltErrorCode = "Ошибка Cobalt, код — {0}"
 
         MenuItem_Service_Select_Text = "Выбрать {0}"
         MenuItem_Service_Select_Subtext = "Сервис в reSwaga"
         MenuItem_Service_Success = "Сервис обновлен на {0}."
+        MenuItem_Service_Success_Subtext = "Но вам нужно указать данные авторизации."
         MenuItem_Service_Fail = "Не удалось обновить сервис на {0}."
 
     class LanguageEnglish:
@@ -406,6 +439,7 @@ class LocaleController:
 
         Settings_CobaltApi_Text = 'Cobalt API Url'
         Settings_CobaltApi_Subtext = 'Please do not change this value if you do not know what it is responsible for and why it is needed.'
+        Settings_CobaltApi_Custom_Text = 'Custom Cobalt API'
 
         Settings_CardSettings_Header = "Customization"
 
@@ -516,22 +550,26 @@ class LocaleController:
         VkMusic_Audio_NotFound = "Track not found."
         VkMusic_Warning = "❗❗❗Warning❗❗❗\nService VK Music working only if you enabled stream track in to profile in VK"
 
+        SoundCloud_Warning = "❗❗❗Warning❗❗❗\nService SoundCloud working only with VPN service (if you in Russia)"
+
         Action_Fix = "Fix"
 
         Platform_YandexMusic = "Yandex.Music"
         Platform_VkMusic = "VK Music"
 
+        Alert_Donate_Header = "Donate"
         Alert_Donate_Title = "Support Development"
         Alert_Donate_Text = "Below you can copy the TON address of the reSwaga developers and support the development with your donation."
         Alert_Donate_Button = "Copy"
 
         Bulletin_InvalidCobaltResponse = "Invalid response from Cobalt API"
         Bulletin_NoItemsToDownload = "No items to download"
-        Bulletin_CobaltErrorCode = "[reSwaga]: Cobalt Error Code — {0}"
+        Bulletin_CobaltErrorCode = "Cobalt Error Code — {0}"
 
         MenuItem_Service_Select_Text = "Select {0}"
         MenuItem_Service_Select_Subtext = "Service in reSwaga"
         MenuItem_Service_Success = "Selected {0} as main service."
+        MenuItem_Service_Success_Subtext = "But you need set auth data."
         MenuItem_Service_Fail = "Failed to select {0} as main service."
 
 
@@ -788,13 +826,7 @@ class YandexMusic(BasePlatform):
             Text(
                 text="Custom API Guide",
                 icon="msg_info",
-                on_click=lambda _: plugin.show_info_alert(
-                    title="custom api guide",
-                    message="guide",
-                    positive_text="Ok",
-                    neutral_text="Guide",
-                    neutral_listener=lambda: open_link("https://github.com/MIPOHBOPOHIH/YMMBFA")
-                )
+                on_click=lambda _: open_link("https://github.com/MIPOHBOPOHIH/megacurrenttrack-go")
             ) if custom_api_url else None
         ]
 
@@ -843,7 +875,8 @@ class SoundCloud(BasePlatform):
             'linked_partitioning': '1'
         }
         self.api_url: str = 'https://api-v2.soundcloud.com/'
-        self.can_download_track = False
+        # self.can_download_track = False
+        self.pre_auth_settings = True
 
     def get_track(self) -> Optional[Track]:
         if not self.token:
@@ -907,10 +940,23 @@ class SoundCloud(BasePlatform):
             return track
 
         except Exception as e:
-            logcat(f"[Soundcloud] Exception in get_track: {e}")
+            import traceback
+            logcat(f"[Soundcloud] Exception in get_track: {e}\nFull traceback: {traceback.format_exc()}")
             self.now_track = Track(active=False)
-            show_info(str(e))
             return Track(active=False)
+
+    def create_pre_auth_settings(self, plugin: BasePlugin) -> List[Any]:
+        return [
+            Divider(
+                text=locale.SoundCloud_Warning
+            ),
+            Text(
+                text=locale.Settings_YandexMusic_Auth_Guide,
+                icon="msg_info",
+                on_click=lambda _: open_link("https://now.es3n1n.eu/sc/")
+            )
+        ]
+
 
 # FROM 'VkNowPlay' PLUGIN
 class VkMusic(BasePlatform):
@@ -987,6 +1033,7 @@ class VkMusic(BasePlatform):
         except Exception as e:
             import traceback
             logcat(f"Exception occurred while getting VK status: {e}\nFull traceback: {traceback.format_exc()}")
+            self.now_track = Track(active=False)
             return Track(active=False)
 
     def special_platform_args_check(self, plugin):
@@ -1037,7 +1084,7 @@ class VkMusic(BasePlatform):
 class TgMusic(BasePlatform):
     def __init__(self, value):
         super().__init__(value)
-        self.can_download_track = False
+        # self.can_download_track = False
 
     def get_track(self):
         now_playing = MediaController.getInstance().getPlayingMessageObject()
@@ -1295,10 +1342,11 @@ class ReSwagaPlugin(BasePlugin):
                         if cached_value != current_value:
                             save_platform_value(current_platform, current_value)
 
-            self.set_menu_items(False)
+            if self.get_setting("enable_auth_data_cache", False):
+                self.set_menu_items(False)
 
             logcat(f"Plugin loaded.")
-        except Exception as e:
+        except Exception as _:
             import traceback
             logcat(traceback.format_exc())
 
@@ -1314,6 +1362,20 @@ class ReSwagaPlugin(BasePlugin):
         is_value_valid = self.is_platform_value_valid(selected_platform)
 
         settings = [
+            Header(text=locale.Alert_Donate_Header),
+            Text(
+                text=locale.Setting_Other_Donate,
+                icon="msg_ton",
+                accent=True,
+                on_click=lambda view: self.show_info_alert(
+                    title=locale.Alert_Donate_Title,
+                    message=locale.Alert_Donate_Text,
+                    positive_text="OK",
+                    neutral_text=locale.Alert_Donate_Button,
+                    neutral_listener=lambda: copy("UQBVxjueXqAEpALX_b0yr-ytXN26LOTpSBn26b9VRHKrmm5F")
+                )
+            ),
+            Divider(),
             Header(text=locale.Settings_Auth_Header),
             Selector(
                 key="selected_platform",
@@ -1341,9 +1403,9 @@ class ReSwagaPlugin(BasePlugin):
         if self.platform.pre_auth_settings:
             pre_auth_settings = self.platform.create_pre_auth_settings(self)
             if len(pre_auth_settings) > 0:
-                settings += [ 
+                settings += [
                     Header(text=get_platform(selected_platform).value[1]),
-                    Divider() 
+                    Divider()
                 ]
                 settings += pre_auth_settings
 
@@ -1359,21 +1421,31 @@ class ReSwagaPlugin(BasePlugin):
                     Divider(),
                     Header(
                         text=f"{get_platform(selected_platform).value[1]} - Additional settings"
-                    ) 
+                    )
                 ]
                 settings += additional_settings
 
         settings += [
             Divider(),
 
-            Header(text=locale.Settings_CardSettings_Header),
-            Input(
+            Header(text='Cobalt API'),
+            Selector(
                 key='cobalt_api_url',
                 text=locale.Settings_CobaltApi_Text,
-                subtext=locale.Settings_CobaltApi_Subtext,
-                default=DEFAULT_COBALT_API_URL,
+                default=1,
+                items=COBALT_API_URLS,
                 icon='msg_instant_link'
             ),
+            Input(
+                key='cobalt_api_url_custom',
+                text=locale.Settings_CobaltApi_Custom_Text,
+                subtext=locale.Settings_CobaltApi_Subtext,
+                default=DEFAULT_COBALT_API_URL,
+                icon='msg2_devices'
+            ) if self.get_setting('cobalt_api_url', 1) == 0 else None,
+            Divider(),
+
+            Header(text=locale.Settings_CardSettings_Header),
             Selector(
                 key="background",
                 text=locale.Settings_BackgroundMode_Text,
@@ -1391,7 +1463,9 @@ class ReSwagaPlugin(BasePlugin):
                 items=[
                     locale.Settings_Font_Item1,
                     locale.Settings_Font_Item2,
-                    locale.Settings_Font_Item3
+                    locale.Settings_Font_Item3,
+                    "Yandex Music",
+                    "Yandex Text",
                 ],
                 icon="msg_photo_text_regular"
             ),
@@ -1479,18 +1553,6 @@ class ReSwagaPlugin(BasePlugin):
                 text=locale.Setting_Other_ForceDownload,
                 icon="msg_download",
                 on_click=lambda _: threading.Thread(target=self.download_resources, args=(True,), daemon=True).start()
-            ),
-            Text(
-                text=locale.Setting_Other_Donate,
-                icon="msg_ton",
-                accent=True,
-                on_click=lambda view: self.show_info_alert(
-                    title=locale.Alert_Donate_Title,
-                    message=locale.Alert_Donate_Text,
-                    positive_text="OK",
-                    neutral_text=locale.Alert_Donate_Button,
-                    neutral_listener=lambda: copy("UQBVxjueXqAEpALX_b0yr-ytXN26LOTpSBn26b9VRHKrmm5F")
-                )
             )
         ]
 
@@ -1572,12 +1634,24 @@ class ReSwagaPlugin(BasePlugin):
         def on_menu_item_click(new_platform: int):
             self.set_menu_items(True)
             self.set_setting('selected_platform', new_platform)
+            self.create_settings()
+
             platform: Platform = get_platform(new_platform)
 
             if self.get_setting('selected_platform', int(Platform.NotSelected.value[0])) == new_platform:
                 self.update_platform_object(new_platform, False)
                 self.set_menu_items(False)
-                show_success(locale.MenuItem_Service_Success.format(platform.value[1]))
+
+                success_text = locale.MenuItem_Service_Success.format(platform.value[1])
+
+                if self.get_setting('value', DEFAULT_VALUE) in ['', None, DEFAULT_VALUE] and platform != Platform.TgMusic:
+                    show_info(
+                        message=f'\n{success_text}\n{locale.MenuItem_Service_Success_Subtext}',
+                        on_click=lambda: open_plugin_settings(),
+                        button_text=locale.Check_Value_NotValid_Button
+                    )
+                else:
+                    show_success(success_text)
             else:
                 show_error(locale.MenuItem_Service_Fail.format(pl.value[1]))
 
@@ -1597,7 +1671,7 @@ class ReSwagaPlugin(BasePlugin):
                         item_id=item_id,
                         icon='msg_tone_on',
                         text=locale.MenuItem_Service_Select_Text.format(pl.value[1]),
-                        subtext=locale.MenuItem_Service_Select_Subtext,
+                        # subtext=locale.MenuItem_Service_Select_Subtext,
                         on_click=lambda _, p=pl: on_menu_item_click(int(p.value[0]))
                     )
                 )
@@ -1688,10 +1762,13 @@ class ReSwagaPlugin(BasePlugin):
     def update_cache(self, new_value: bool):
         initialize_cached_platforms_values()
         if new_value:
+            self.set_menu_items(False)
             save_platform_value(
                 self.get_setting("selected_platform", int(Platform.NotSelected.value[0])),
                 self.get_setting("value", DEFAULT_VALUE)
             )
+        else:
+            self.set_menu_items(True)
 
     def clear_cached_platforms_values(self):
         initialize_cached_platforms_values()
@@ -1707,8 +1784,16 @@ class ReSwagaPlugin(BasePlugin):
             show_error(locale.CachedAuthData_Clear_Error)
 
     def download_track_with_cobalt(self, url: str, track: Track) -> Optional[str]:
-        api_url: str = self.get_setting('cobalt_api_url', DEFAULT_COBALT_API_URL)
-        temp_dir = get_temp_dir()
+        api_url_index: int = self.get_setting('cobalt_api_url', 1)
+
+        if api_url_index == 0:
+            api_url = self.get_setting('cobalt_api_url_custom', DEFAULT_COBALT_API_URL)
+
+            if api_url in ['', None]:
+                api_url = DEFAULT_COBALT_API_URL
+        else:
+            api_url: str = COBALT_API_URLS[api_url_index]
+
         payload: Dict[str, str] = {
             "url": url,
             "downloadMode": "audio",
@@ -1726,7 +1811,7 @@ class ReSwagaPlugin(BasePlugin):
                 response.raise_for_status()
             except Exception as e:
                 run_on_ui_thread(lambda: self.dismiss_spinner())
-                BulletinHelper.show_error(locale.Bulletin_InvalidCobaltResponse)
+                show_error(locale.Bulletin_InvalidCobaltResponse)
                 logcat(f"Cobalt Request Error: {e} | data = {payload}")
                 return None
 
@@ -1737,30 +1822,32 @@ class ReSwagaPlugin(BasePlugin):
 
             if status == "error":
                 code = data.get("error", {}).get("code", "Unknown error")
-                BulletinHelper.show_error(locale.Bulletin_CobaltErrorCode.format(code))
+                show_error(locale.Bulletin_CobaltErrorCode.format(code))
                 return None
 
             elif status == "picker":
                 items = data.get("picker", [])
                 if not items:
-                    BulletinHelper.show_error(locale.Bulletin_NoItemsToDownload)
+                    show_error(locale.Bulletin_NoItemsToDownload)
                     return None
                 item = items[0]
                 direct_url = item.get("url")
                 original_filename = item.get("filename")
 
-            elif status in ["stream", "redirect", "success"]:
+            elif status in ["stream", "redirect", "success", "tunnel"]:
                 direct_url = data.get("url")
                 original_filename = data.get("filename")
 
             else:
                 logcat(f"Cobalt Warning: Received an unhandled status: '{status}'")
-                BulletinHelper.show_error(locale.Bulletin_InvalidCobaltResponse)
+                show_error(locale.Bulletin_InvalidCobaltResponse)
                 return None
 
             if not direct_url:
-                BulletinHelper.show_error(locale.Bulletin_InvalidCobaltResponse)
+                show_error(locale.Bulletin_InvalidCobaltResponse)
                 return None
+
+            temp_dir = get_temp_dir()
 
             file_extension = original_filename.split('.')[-1] if original_filename and '.' in original_filename else 'mp3'
             filename: str = f"{track.title} (via {__name__}).{file_extension}"
@@ -1774,18 +1861,19 @@ class ReSwagaPlugin(BasePlugin):
             except Exception as e:
                 run_on_ui_thread(lambda: self.dismiss_spinner())
                 logcat(f"Cobalt Download Error: {e}")
-                BulletinHelper.show_error(locale.Bulletin_InvalidCobaltResponse)
+                show_error(locale.Bulletin_InvalidCobaltResponse)
                 return None
 
             with open(file_path, "wb") as f:
                 for chunk in track_resp.iter_content(chunk_size=8192):
                     f.write(chunk)
 
-            try:
-                size = os.path.getsize(file_path)
-                logcat(f"Downloaded audio: {filename}, size: {size}")
-            except Exception as dbg_e:
-                logcat(f"Download error: {dbg_e}")
+            ext_root = ApplicationLoader.applicationContext.getExternalCacheDir()
+            plugin_dir = File(ext_root, TEMP_DIR_NAME)
+            ext_path = File(plugin_dir, File(file_path).getName()).getAbsolutePath()
+
+            with open(file_path, 'rb') as fin, open(ext_path, 'wb') as fout:
+                fout.write(fin.read())
 
             return file_path
         except Exception as _:
@@ -1899,12 +1987,10 @@ class ReSwagaPlugin(BasePlugin):
             return
 
         url = track.download_url
+        temp_dir = get_temp_dir()
 
         try:
             if not url is None:
-                temp_dir = get_temp_dir()
-                temp_dir_name = "swaga_temp"
-
                 ext = os.path.splitext(url)[1] or ".mp3"
                 filename = f"{track.title}{ext}"
                 file_path = File(temp_dir, filename).getAbsolutePath()
@@ -1916,7 +2002,7 @@ class ReSwagaPlugin(BasePlugin):
                         f.write(chunk)
 
                 ext_root = ApplicationLoader.applicationContext.getExternalCacheDir()
-                plugin_dir = File(ext_root, temp_dir_name)
+                plugin_dir = File(ext_root, TEMP_DIR_NAME)
 
                 if not plugin_dir.exists() and not plugin_dir.mkdirs():
                     pass
@@ -1926,6 +2012,7 @@ class ReSwagaPlugin(BasePlugin):
                 with open(file_path, 'rb') as fin, open(ext_path, 'wb') as fout:
                     fout.write(fin.read())
 
+                logcat(f'Saved in to {ext_path}')
                 delete_file_delayed(file_path)
             else:
                 new_url = get_download_link(
@@ -1936,14 +2023,24 @@ class ReSwagaPlugin(BasePlugin):
                 if new_url in ['', None]:
                     run_on_ui_thread(lambda: self.dismiss_spinner())
                     return
-                
-                ext_path = self.download_track_with_cobalt(new_url, track)
-                if ext_path in ['', None] or not os.path.exists(ext_path):
+
+                file_path = self.download_track_with_cobalt(new_url, track)
+                if file_path in ['', None] or not os.path.exists(file_path):
                     run_on_ui_thread(lambda: self.dismiss_spinner())
                     return
 
+                ext_root = ApplicationLoader.applicationContext.getExternalCacheDir()
+                plugin_dir = File(ext_root, TEMP_DIR_NAME)
+                ext_path = File(plugin_dir, File(file_path).getName()).getAbsolutePath()
+                logcat(file_path)
+
             account = get_account_instance()
-            mime = "audio/mpeg"
+
+            if ext_path.endswith('.opus'):
+                mime = 'audio/opus'
+            else:
+                mime = 'audio/mpeg'
+
             platform = self.get_setting("selected_platform", 0)
 
             platform_link: int = self.get_setting("platform_link", 1)
@@ -1993,6 +2090,9 @@ class ReSwagaPlugin(BasePlugin):
 
     def update_platform_object(self, new_platform: int, value: bool):
         cache_enabled: bool = self.get_setting("enable_auth_data_cache", False)
+
+        if cache_enabled:
+            self.set_menu_items(True)
 
         if not value:
             if cache_enabled and is_cached_value_exist(new_platform):
@@ -2046,6 +2146,9 @@ class ReSwagaPlugin(BasePlugin):
             self.start_poller()
         else:
             logcat("Unknown token state, can't do anything")
+
+        if cache_enabled:
+            self.set_menu_items(False)
 
     def is_args_not_valid(self, platform: int) -> bool:
         if platform == int(Platform.NotSelected.value[0]) or self.platform is None:
@@ -2577,7 +2680,7 @@ class ReSwagaPlugin(BasePlugin):
                 run_on_ui_thread(lambda: self.update_loading_progress(progress))
 
                 file_path = os.path.join(temp.getAbsolutePath(), r)
-                url = DOWNLOAD_URL + f"resources/" + r
+                url = DOWNLOAD_URL + f"resources/fonts/" + r
 
                 download_file(url, file_path)
 
