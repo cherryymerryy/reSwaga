@@ -1944,7 +1944,6 @@ class ReSwagaPlugin(BasePlugin):
 
             account = get_account_instance()
             mime = "audio/mpeg"
-            markdown_need = False
             platform = self.get_setting("selected_platform", 0)
 
             platform_link: int = self.get_setting("platform_link", 1)
@@ -1970,6 +1969,8 @@ class ReSwagaPlugin(BasePlugin):
             if any([platform_link_added, songlink_added]):
                 emoji: str = random.choice(["[🎵](5188621441926438751) | ", "[🎶](5188705588925702510) | "])
                 caption = emoji + caption
+
+            markdown_need = any([platform_link_added, songlink_added])
 
             SendMessagesHelper.prepareSendingDocument(
                 account,
