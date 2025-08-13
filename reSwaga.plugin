@@ -90,7 +90,7 @@ __id__ = "reswag"
 __name__ = "reSwaga"
 __description__ = "Плагин для отправки карточки/аудио файла текущего трека для музыкальных сервисов."
 __icon__ = "remusic/5"
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 __author__ = "@meeowPlugins"
 __min_version__ = "11.12.1"
 
@@ -911,24 +911,18 @@ class SoundCloud(BasePlatform):
                 return Track(active=False)
 
             metadata: Optional[Dict[str, Any]] = t.get('publisher_metadata', None)
-            if not metadata:
+            if metadata is None:
                 logcat("[Soundcloud] Metadata is None")
                 self.now_track = Track(active=False)
                 return Track(active=False)
 
-            raw_artist: str = metadata.get('artist', '')
-            if isinstance(raw_artist, str):
-                artists = [x.strip() for x in raw_artist.split(',') if x.strip()]
-            elif isinstance(raw_artist, list):
-                artists = raw_artist
-            else:
-                artists = []
+            raw_artist: str = metadata.get('artist', 'Anonymous artist')
 
             track = Track(
                 active=True,
                 track_id=track_id,
                 title=t.get('title', 'No title provided'),
-                artist=artists,
+                artist=[raw_artist],
                 album=metadata.get('album_title', ''),
                 thumb=t.get('artwork_url', ''),
                 duration=int(t.get('duration', 0)) // 1000,
@@ -1084,33 +1078,35 @@ class VkMusic(BasePlatform):
 class TgMusic(BasePlatform):
     def __init__(self, value):
         super().__init__(value)
-        # self.can_download_track = False
 
     def get_track(self):
         now_playing = MediaController.getInstance().getPlayingMessageObject()
-        if now_playing is None or MediaController.getInstance().isMessagePaused() or not now_playing.isMusic():
+        if now_playing is None or MediaController.getInstance().isMessagePaused():
             self.now_track = Track(active=False)
             return Track(active=False)
-        
-        owner_id = now_playing.messageOwner.id
-        title = now_playing.getMusicTitle()
-        author = now_playing.getMusicAuthor()
 
-        # pizdec govnishe
-        artwork = now_playing.getArtworkUrl(False)
-        req = requests.get(str(artwork).replace('athumb', 'https')).json()
-        results: Optional[List[Dict[str, str]]] = req.get('results', None)
+        self.can_download_track = now_playing.isMusic()
+        owner_id: Optional[int] = now_playing.messageOwner.id
+        title: Optional[str] = now_playing.getMusicTitle()
+        author: Optional[str] = now_playing.getMusicAuthor()
+        thumbnail: str = EMPTY_TRACK_COVER
+        album: str = ""
+        link: str = ""
 
-        if results is None or len(results) <= 0 or results[0] is None:
-            album = None
-            link = None
-            thumbnail = EMPTY_TRACK_COVER
-        else:
-            owner_id = results[0].get('trackId', now_playing.messageOwner.id)
-            album = results[0].get('collectionViewUrl', None)
-            link = results[0].get('trackViewUrl', None)
-            artwork_url = results[0].get('artworkUrl30', None)
-            thumbnail = str(artwork_url).replace('30x30bb', '600x600bb') if not artwork_url is None else EMPTY_TRACK_COVER
+        if now_playing.isMusic() and (not now_playing.isVoice() or not now_playing.isRoundVideo()):
+            # pizdec govnishe
+            artwork = now_playing.getArtworkUrl(False)
+            req = requests.get(str(artwork).replace('athumb', 'https')).json()
+            results: Optional[List[Dict[str, str]]] = req.get('results', None)
+
+            if results and not results[0] is None:
+                owner_id = results[0].get('trackId', now_playing.messageOwner.id)
+                album = results[0].get('collectionViewUrl', None)
+                link = results[0].get('trackViewUrl', None)
+                artwork_url = results[0].get('artworkUrl30', None)
+                thumbnail = str(artwork_url).replace('30x30bb','600x600bb') \
+                    if not artwork_url is None \
+                    else EMPTY_TRACK_COVER
 
         duration = now_playing.getDuration()
         progress = now_playing.audioProgressSec
@@ -1591,14 +1587,14 @@ class ReSwagaPlugin(BasePlugin):
                 default=DEFAULT_INSTANT_SUBTEXT,
                 subtext=locale.Settings_InstantCardSubtext_Subtext,
                 icon="menu_feature_intro"
-            ) if instant_card else None,
+            ),
             Input(
                 key="instant_main_text",
                 text=locale.Settings_InstantCardMainText_Text,
                 default=DEFAULT_INSTANT_MAIN_TEXT,
                 subtext=locale.Settings_InstantCardMainText_Subtext,
                 icon="menu_feature_cover"
-            ) if instant_card else None,
+            ),
         ]
 
     def create_stream_settings(self):
@@ -1895,11 +1891,13 @@ class ReSwagaPlugin(BasePlugin):
 
             if track is None:
                 run_on_ui_thread(lambda: self.dismiss_spinner())
+                logcat("z1")
                 show_error(locale.Track_Not_Active)
                 return
 
             if not track.active:
                 run_on_ui_thread(lambda: self.dismiss_spinner())
+                logcat("z2")
                 show_error(locale.Track_Not_Active)
                 return
 
@@ -1912,6 +1910,7 @@ class ReSwagaPlugin(BasePlugin):
 
             if temp_file_path in ["", None]:
                 run_on_ui_thread(lambda: self.dismiss_spinner())
+                logcat("z3")
                 show_error(locale.Track_Not_Active)
                 return
 
@@ -1919,6 +1918,7 @@ class ReSwagaPlugin(BasePlugin):
 
             if generated_photo is None:
                 run_on_ui_thread(lambda: self.dismiss_spinner())
+                logcat("z4")
                 show_error(locale.Track_Not_Active)
                 return
 
@@ -1929,6 +1929,7 @@ class ReSwagaPlugin(BasePlugin):
 
             if not track.active:
                 run_on_ui_thread(lambda: self.dismiss_spinner())
+                logcat("z5")
                 show_error(locale.Track_Not_Active)
                 return
 
@@ -1984,6 +1985,11 @@ class ReSwagaPlugin(BasePlugin):
         if not track.active:
             run_on_ui_thread(lambda: self.dismiss_spinner())
             show_error(locale.Track_Not_Active)
+            return
+
+        if not self.platform.can_download_track:
+            run_on_ui_thread(lambda: self.dismiss_spinner())
+            show_error(locale.Check_Platform_DownloadNotAvailable)
             return
 
         url = track.download_url
