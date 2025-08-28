@@ -41,10 +41,9 @@ import threading
 import time
 import requests
 import re
+import colorsys
 
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
-from PIL.Image import Resampling
-
 from enum import Enum
 from typing import Optional, Any, Callable, List, Dict
 from secrets import choice
@@ -88,9 +87,13 @@ from org.telegram.messenger import ApplicationLoader, R, AndroidUtilities, SendM
 
 __id__ = "reswag"
 __name__ = "reSwaga"
-__description__ = "Плагин для отправки карточки/аудио файла текущего трека для музыкальных сервисов."
+__description__ =   (
+    "Плагин для отправки карточки/аудио файла текущего трека для музыкальных сервисов."
+    "\n\n\t\t.now - Для отправки карточки,"
+    "\n\t\t.nowt - Для отправки аудио файла."
+)
 __icon__ = "remusic/5"
-__version__ = "1.0.1"
+__version__ = "1.1.0"
 __author__ = "@meeowPlugins"
 __min_version__ = "11.12.1"
 
@@ -111,8 +114,6 @@ RESOURCES: List[str] = [
 ]
 
 DOWNLOAD_URL: str = "https://raw.githubusercontent.com/cherryymerryy/reSwaga/main/"
-REMOTE_CONFIG_URL: str = DOWNLOAD_URL + "config.json"
-REMOTE_CONFIG: Dict[str, Any] = {}
 
 EMPTY_TRACK_COVER: str = DOWNLOAD_URL + 'resources/img/empty_cover.png'
 
@@ -144,6 +145,10 @@ COBALT_API_URLS = [
     "https://co.eepy.today",
     "https://co.otomir23.me",
 ]
+
+MIN_LIGHTNESS_FOR_TEXT = 0.725
+MAX_LIGHTNESS_FOR_TEXT = 0.25
+LIGHTNESS_THRESHOLD = 0.5
 
 
 def logcat(message: Any):
@@ -189,20 +194,6 @@ def get_temp_dir() -> Optional[File]:
     except Exception as e:
         logcat(f"Error getting/creating temp directory: {e}")
         return None
-
-
-def read_remote_config():
-    global REMOTE_CONFIG, RESOURCES
-    try:
-        req = requests.get(REMOTE_CONFIG_URL)
-        if req.status_code == 200:
-            decoded_content = req.content.decode('utf-8-sig')
-            REMOTE_CONFIG = json.loads(decoded_content)
-            logcat("Remote config received.")
-        else:
-            logcat("Remote config not found.")
-    except Exception as e:
-        logcat(f"Failed to receive remote config: {e}")
 
 
 def download_file(url: str, file_path: str):
@@ -294,6 +285,10 @@ class LocaleController:
 
         Settings_CardSettings_Header = "Внешний вид"
 
+        Settings_CardType_Header = "Стиль карточки"
+        Settings_CardType_1 = "Стандартная"
+        Settings_CardType_2 = "Вертикальная 🆕"
+
         Settings_BackgroundMode_Text = "Фон"
         Settings_BackgroundMode_Item_1 = "Обложка трека"
         Settings_BackgroundMode_Item_2 = "Цвет обложки"
@@ -351,6 +346,10 @@ class LocaleController:
 
         Settings_FormatInStream_Text = "Формат"
         Settings_FormatInStream_Subtext = "Формат отображения трека. {title} — название трека, {artists} — артист(ы)"
+
+        Settings_Stream_AccountId = "Выбрать текущий аккаунт для стриминга"
+        Settings_Stream_AccountId_Saved = "Выбран аккаунт для стриминга"
+        Settings_Stream_AccountId_Failed_Save = "Не удалось выбрать аккаунт для стриминга"
 
         Settings_Cache_Header = "Кэш"
         Setting_Cache_Enable_Text = "Кэширование данных авторизации"
@@ -443,6 +442,10 @@ class LocaleController:
 
         Settings_CardSettings_Header = "Customization"
 
+        Settings_CardType_Header = "Card Style"
+        Settings_CardType_1 = "Standard"
+        Settings_CardType_2 = "Vertical 🆕"
+
         Settings_BackgroundMode_Text = "Background"
         Settings_BackgroundMode_Item_1 = "Track Cover"
         Settings_BackgroundMode_Item_2 = "Cover Color"
@@ -500,6 +503,10 @@ class LocaleController:
 
         Settings_FormatInStream_Text = "Format"
         Settings_FormatInStream_Subtext = "Customize track display. {title} — track name, {artists} — artist(s)"
+
+        Settings_Stream_AccountId = "Select this account for streaming"
+        Settings_Stream_AccountId_Saved = "Selected account for streaming"
+        Settings_Stream_AccountId_Failed_Save = "Failed to select account for streaming"
 
         Settings_Cache_Header = "Cache"
         Setting_Cache_Enable_Text = "Caching of authorization data"
@@ -1225,7 +1232,7 @@ def _get_cache_file_path() -> Optional[str]:
         logcat("Could not get base temp directory for cache.")
         return None
 
-    swaga_dir_path = os.path.join(temp_dir_obj.getAbsolutePath(), "swaga_temp")
+    swaga_dir_path = os.path.join(temp_dir_obj.getAbsolutePath(), TEMP_DIR_NAME)
     return os.path.join(swaga_dir_path, "cached_values.json")
 
 
@@ -1293,6 +1300,108 @@ def save_platform_value(platform: int, value: str):
         logcat(f"Saved value '{value}' at index {platform}.")
 
 
+def get_cover_accent_color(cover: Image.Image):
+    img = cover.resize((16, 16), Image.Resampling.LANCZOS)
+    pixels = img.load()
+    l_width, l_height = img.size
+
+    for y in range(l_height):
+        for x in range(l_width):
+            if img.mode == 'L':
+                r = pixels[x, y]
+                r = math.pow(r / 255.0, 1 / 2.2) * 255.0
+                pixels[x, y] = int(r)
+            else:
+                r, g, b = pixels[x, y][:3]
+                r = math.pow(r / 255.0, 1 / 2.2) * 255.0
+                g = math.pow(g / 255.0, 1 / 2.2) * 255.0
+                b = math.pow(b / 255.0, 1 / 2.2) * 255.0
+                if img.mode == 'RGB':
+                    pixels[x, y] = (int(r), int(g), int(b))
+                elif img.mode == 'RGBA':
+                    a = pixels[x, y][3]
+                    pixels[x, y] = (int(r), int(g), int(b), a)
+
+    if img.mode == 'L':
+        img = img.convert('RGB')
+    elif img.mode == 'RGBA':
+        rgb_img = Image.new('RGB', img.size)
+        rgb_img.paste(img, mask=img.split()[3])
+        img = rgb_img
+
+    pixels = list(img.getdata())
+    i_width, i_height = img.size
+
+    if img.mode == 'RGB':
+        total_r, total_g, total_b = 0, 0, 0
+        darkness_index = 2.5
+        for r, g, b in pixels:
+            total_r += int(r // darkness_index)
+            total_g += int(g // darkness_index)
+            total_b += int(b // darkness_index)
+        count = i_width * i_height
+        average = (total_r // count, total_g // count, total_b // count)
+    else:
+        total = sum(pixels)
+        average = (total // (i_width * i_height),) * 3
+
+    return average
+
+
+def adjust_color_for_readability(rgb_color: tuple) -> tuple:
+    r, g, b = [x / 255.0 for x in rgb_color]
+    h, l, s = colorsys.rgb_to_hls(r, g, b)
+
+    if l < LIGHTNESS_THRESHOLD:
+        new_lightness = MIN_LIGHTNESS_FOR_TEXT
+    else:
+        new_lightness = MAX_LIGHTNESS_FOR_TEXT
+
+    new_r, new_g, new_b = colorsys.hls_to_rgb(h, new_lightness, s)
+    return tuple(int(x * 255) for x in (new_r, new_g, new_b))
+
+
+def _get_stream_info_file_path() -> Optional[str]:
+    temp_dir_obj = get_temp_dir()
+    if not temp_dir_obj:
+        logcat("Could not get base temp directory for cache.")
+        return None
+
+    swaga_dir_path = os.path.join(temp_dir_obj.getAbsolutePath(), TEMP_DIR_NAME)
+    return os.path.join(swaga_dir_path, "stream_info.json")
+
+
+def is_stream_value_exist() -> bool:
+    path = _get_stream_info_file_path()
+    if not path:
+        return False
+
+    value = read(path)
+
+    return isinstance(value, int)
+
+
+def save_stream_account_id(new_user_id: int):
+    path = _get_stream_info_file_path()
+    if path is None:
+        show_error(locale.Settings_Stream_AccountId_Failed_Save)
+        return
+
+    write(path, new_user_id)
+    show_success(locale.Settings_Stream_AccountId_Saved)
+
+
+def get_local_stream_id() -> int:
+    path = _get_stream_info_file_path()
+    if path is None:
+        show_error("Failed to load data")
+        return 0
+
+    value = read(path)
+
+    return value if isinstance(value, int) else 0
+
+
 class ReSwagaPlugin(BasePlugin):
     def __init__(self):
         super().__init__()
@@ -1310,12 +1419,18 @@ class ReSwagaPlugin(BasePlugin):
             get_temp_dir()
 
             threading.Thread(target=self.check_resources, args=(False,)).start()
-            # threading.Thread(target=read_remote_config, daemon=True).start()
+
+            stream_bio_enabled: bool = self.get_setting("stream_bio_enabled", False)
+            stream_account_id: int = get_local_stream_id()
 
             self.poller_enabled = any([
-                self.get_setting("stream_bio_enabled", False),
+                stream_bio_enabled,
                 self.get_setting("fast_card_render", False)
             ])
+
+            user_id: int = get_user_config().getClientUserId()
+            if stream_account_id == 0 and get_local_stream_id() != user_id:
+                self.set_new_stream_account()
 
             current_platform = self.get_setting("selected_platform", 0)
             if current_platform != int(Platform.NotSelected.value[0]):
@@ -1443,6 +1558,16 @@ class ReSwagaPlugin(BasePlugin):
 
             Header(text=locale.Settings_CardSettings_Header),
             Selector(
+                key='card_type',
+                text=locale.Settings_CardType_Header,
+                default=0,
+                icon="msg_background",
+                items=[
+                    locale.Settings_CardType_1,
+                    locale.Settings_CardType_2
+                ]
+            ),
+            Selector(
                 key="background",
                 text=locale.Settings_BackgroundMode_Text,
                 default=1,
@@ -1517,6 +1642,12 @@ class ReSwagaPlugin(BasePlugin):
                 icon="msg_online"
             ),
             Text(
+                text=locale.Settings_Stream_AccountId,
+                on_click=lambda _: self.set_new_stream_account(),
+                accent=True,
+                icon="msg_mention"
+            ) if get_user_config().getClientUserId() != get_local_stream_id() else None,
+            Text(
                 text=locale.Setting_Stream_Title,
                 icon="msg_download_settings",
                 create_sub_fragment=self.create_stream_settings
@@ -1555,7 +1686,6 @@ class ReSwagaPlugin(BasePlugin):
         return settings
 
     def create_customization_settings(self):
-        instant_card = self.get_setting("fast_card_render", False)
         return [
             Input(
                 key="background_color",
@@ -1746,6 +1876,11 @@ class ReSwagaPlugin(BasePlugin):
             elif event_type in [AppEvent.RESUME, AppEvent.START]:
                 self.start_poller()
 
+    def set_new_stream_account(self):
+        save_stream_account_id(get_user_config().getClientUserId())
+        self.save_default_user_bio()
+        self.set_setting("stream_bio_enabled", self.get_setting("stream_bio_enabled", False))
+
     def is_platform_value_valid(self, platform: int) -> bool:
         value = str(self.get_setting("value", DEFAULT_VALUE))
         if platform == int(Platform.YandexMusic.value[0]):
@@ -1904,7 +2039,16 @@ class ReSwagaPlugin(BasePlugin):
             temp_dir = get_temp_dir()
             temp_file_path = None
 
-            answer = self._make_card() if not (self.get_setting("fast_card_render", False)) else True
+            card_type: int = self.get_setting('card_type', 0)
+
+            if card_type == 0:
+                card = self.create_horizontal_card()
+            elif card_type == 1:
+                card = self.create_vertical_card()
+            else:
+                card = None
+
+            answer = card if not (self.get_setting("fast_card_render", False)) else True
             if answer:
                 temp_file_path = File(temp_dir, f"now_{__name__}.png").getAbsolutePath()
 
@@ -2232,6 +2376,9 @@ class ReSwagaPlugin(BasePlugin):
                 self.stop_poller()
 
     def set_stream_text(self, default: bool):
+        if get_local_stream_id() != get_user_config().getClientUserId():
+            return
+
         stream_place = self.get_setting("stream_place", 0)
 
         client_user_id = get_user_config().getClientUserId()
@@ -2342,13 +2489,18 @@ class ReSwagaPlugin(BasePlugin):
                     self.platform.get_track()
 
                     if stream_bio_enabled:
+                        user_id: int = get_user_config().getClientUserId()
+                        selected_user_id: int = get_local_stream_id()
+                        if user_id == 0 or user_id != selected_user_id or selected_user_id == 0:
+                            continue
+
                         self.set_stream_text(False)
 
                     if fast_card_render:
                         if self.platform.memory_id != self.platform.now_track.track_id:
                             logcat("MemoryID not equals with Current trackID, making new card.")
                             self.platform.memory_id = self.platform.now_track.track_id
-                            self._make_card()
+                            self.create_horizontal_card()
                         else:
                             logcat("MemoryID equals with Current trackID, no need to make new card.")
                 else:
@@ -2382,7 +2534,7 @@ class ReSwagaPlugin(BasePlugin):
         if self.get_setting("stream_bio_enabled", False):
             self.set_stream_text(True)
 
-    def _make_card(self):
+    def create_horizontal_card(self):
         try:
             track = self.platform.now_track
             temp_dir = get_temp_dir()
@@ -2446,56 +2598,17 @@ class ReSwagaPlugin(BasePlugin):
             thumbnail = background.copy()
 
             if background_setting == 0:
-                background = background.resize((width, width)).crop((0, (width - height) // 2, width, width)).filter(
-                    ImageFilter.GaussianBlur(radius=14))
+                background = (background
+                              .resize((width, width))
+                              .crop((0, (width - height) // 2, width, width))
+                              .filter(ImageFilter.GaussianBlur(radius=14)))
                 background = ImageEnhance.Brightness(background).enhance(0.3)
+
                 card = Image.new('RGB', (width, height), background_color)
                 card.paste(background, (0, 0))
+
             elif not advanced_mode:
-                img = background.resize((16, 16), Resampling.LANCZOS)
-                pixels = img.load()
-                l_width, l_height = img.size
-
-                for y in range(l_height):
-                    for x in range(l_width):
-                        if img.mode == 'L':
-                            r = pixels[x, y]
-                            r = math.pow(r / 255.0, 1 / 2.2) * 255.0
-                            pixels[x, y] = int(r)
-                        else:
-                            r, g, b = pixels[x, y][:3]
-                            r = math.pow(r / 255.0, 1 / 2.2) * 255.0
-                            g = math.pow(g / 255.0, 1 / 2.2) * 255.0
-                            b = math.pow(b / 255.0, 1 / 2.2) * 255.0
-                            if img.mode == 'RGB':
-                                pixels[x, y] = (int(r), int(g), int(b))
-                            elif img.mode == 'RGBA':
-                                a = pixels[x, y][3]
-                                pixels[x, y] = (int(r), int(g), int(b), a)
-
-                if img.mode == 'L':
-                    img = img.convert('RGB')
-                elif img.mode == 'RGBA':
-                    rgb_img = Image.new('RGB', img.size)
-                    rgb_img.paste(img, mask=img.split()[3])
-                    img = rgb_img
-
-                pixels = list(img.getdata())
-                i_width, i_height = img.size
-
-                if img.mode == 'RGB':
-                    total_r, total_g, total_b = 0, 0, 0
-                    darkness_index = 1.9
-                    for r, g, b in pixels:
-                        total_r += int(r // darkness_index)
-                        total_g += int(g // darkness_index)
-                        total_b += int(b // darkness_index)
-                    count = i_width * i_height
-                    average = (total_r // count, total_g // count, total_b // count)
-                else:
-                    total = sum(pixels)
-                    average = (total // (i_width * i_height),) * 3
-                card = Image.new('RGB', (width, height), average)
+                card = Image.new('RGB', (width, height), get_cover_accent_color(background))
 
             else:
                 card = Image.new('RGB', (width, height), background_color)
@@ -2620,7 +2733,140 @@ class ReSwagaPlugin(BasePlugin):
         except Exception as _:
             import traceback
             logcat(f'Failed generate card: {traceback.format_exc()}')
-            return
+            return None
+
+    def create_vertical_card(self):
+        track = self.platform.now_track
+        temp_dir = get_temp_dir()
+        font_family = self.get_setting("font", 0)
+        font_family = FONTS[font_family]
+
+        cover_as_background = self.get_setting("background", 1)
+
+        max_title_symbols = 19
+        max_subtitle_symbols = 30
+
+        local_font_family = None
+
+        advanced_mode = self.get_setting("advanced_mode", False)
+        if not advanced_mode:
+            title_text_color = (255, 255, 255)
+            subtext_color = None
+            background_color = None
+        else:
+            background_color = self.get_setting("background_color", DEFAULT_COLOR["background_color"])
+            title_text_color = self.get_setting("title_text_color", DEFAULT_COLOR["title_text_color"])
+            subtext_color = self.get_setting("subtext_color", DEFAULT_COLOR["subtext_color"])
+
+        if re.findall(r"[А-Яа-яЁё]", track.title) and font_family == "Circular":
+            local_font_family = "Onest"
+
+        title_font_file = File(temp_dir, f"{local_font_family if local_font_family else font_family}-Bold.ttf")
+        title_font = ImageFont.truetype(title_font_file.getAbsolutePath(), 40)
+
+        artist_font_file = File(temp_dir, f"{local_font_family if local_font_family else font_family}-Regular.ttf")
+        artist_font = ImageFont.truetype(artist_font_file.getAbsolutePath(), 30)
+
+        duration_font_path = File(temp_dir, f"{font_family}-Regular.ttf").getAbsolutePath()
+        duration_font = ImageFont.truetype(duration_font_path, 14)
+
+        artists = ", ".join(track.artist)
+
+        try:
+            cover = requests.get(track.thumb, stream=True).raw
+        except:
+            cover = requests.get(EMPTY_TRACK_COVER, stream=True).raw
+
+        original_cover_img = Image.open(cover)
+        center_img = original_cover_img.copy().resize((384, 384), Image.Resampling.LANCZOS)
+        background_fill = get_cover_accent_color(center_img)
+        second_fill = adjust_color_for_readability(background_fill)
+
+        if cover_as_background == 0:
+            card = original_cover_img.resize((600, 660), Image.Resampling.LANCZOS)
+            card = card.filter(ImageFilter.GaussianBlur(radius=25))
+            overlay = Image.new('RGBA', card.size, (0, 0, 0, 90))
+            card = card.convert('RGBA')
+            card = Image.alpha_composite(card, overlay)
+            card = card.convert('RGB')
+        else:
+            final_bg_color = background_color if advanced_mode else background_fill
+            card = Image.new('RGB', (600, 660), final_bg_color)
+
+        draw = ImageDraw.Draw(card)
+
+        img_alpha = center_img.convert('RGBA')
+        mask = Image.new('L', img_alpha.size, 0)
+        m_draw = ImageDraw.Draw(mask)
+        m_draw.rounded_rectangle((0, 0, *img_alpha.size), 25, fill=255)
+        img_alpha.putalpha(mask)
+
+        card.paste(img_alpha, (108, 60), img_alpha)
+
+        if track.duration:
+            progress_bar_color = subtext_color if advanced_mode else second_fill
+
+            draw.rounded_rectangle(
+                xy=(108, 468, 492, 483),
+                radius=25,
+                fill=progress_bar_color
+            )
+
+            progress = track.progress / track.duration
+            draw.rounded_rectangle(
+                xy=(112, 472, 112 + max(7, int(376 * progress)), 479),
+                radius=25 if progress >= 0.1 else 5,
+                fill=(255, 255, 255)
+            )
+
+            draw.text(
+                xy=(108, 490),
+                text=time.strftime("%M:%S", time.gmtime(track.progress)),
+                font=duration_font,
+                fill=progress_bar_color,
+                anchor="la"
+            )
+
+            draw.text(
+                xy=(492, 490),
+                text=time.strftime("%M:%S", time.gmtime(track.duration)),
+                font=duration_font,
+                fill=progress_bar_color,
+                align="center",
+                anchor="ra"
+            )
+
+        final_title_color = title_text_color if advanced_mode else (255, 255, 255)
+
+        draw.text(
+            xy=(15, 550),
+            text=track.title if len(track.title) < max_title_symbols else track.title[:max_title_symbols] + '...',
+            font=title_font,
+            fill=final_title_color,
+            align="center",
+            anchor="la"
+        )
+
+        draw.text(
+            xy=(15, 605),
+            text=artists if len(artists) < max_subtitle_symbols else artists[:max_subtitle_symbols] + '...',
+            font=artist_font,
+            fill=subtext_color if advanced_mode else second_fill,
+            align="center",
+            anchor="la"
+        )
+
+        platform_name: str = get_platform(self.get_setting('selected_platform', 0)).name.lower()
+        platform_logo_url: str = f"{DOWNLOAD_URL}/resources/img/{platform_name}.png"
+        platform_logo = requests.get(platform_logo_url, stream=True).raw
+        logo = Image.open(platform_logo).convert("RGBA")
+        card.paste(logo, (490, 555), logo)
+
+        filename = f"now_{__name__}.png"
+        temp_photo_path = File(temp_dir, filename).getAbsolutePath()
+        card.save(temp_photo_path)
+
+        return temp_photo_path
 
     def is_hex_valid(self, new: str, variable_name: str):
         if not re.match("^#[A-Fa-f0-9]{6}$", new):
@@ -2678,11 +2924,12 @@ class ReSwagaPlugin(BasePlugin):
                 if f.isFile():
                     f.delete()
 
-        progress: int = 0
+        error: bool = False
+        total_resources = len(RESOURCES)
 
-        for r in RESOURCES:
+        for i, r in enumerate(RESOURCES):
             try:
-                progress += 1
+                progress = (i + 1) * 100 // total_resources
                 run_on_ui_thread(lambda: self.update_loading_progress(progress))
 
                 file_path = os.path.join(temp.getAbsolutePath(), r)
@@ -2691,8 +2938,15 @@ class ReSwagaPlugin(BasePlugin):
                 download_file(url, file_path)
 
             except Exception as e:
-                show_error(f"An unexpected error occurred while downloading {r}: {e}")
+                error = True
+                show_error(str(e))
                 logcat(f"An unexpected error occurred while downloading {r}: {e}")
+
+        if error:
+            show_error("Something went wrong")
+        else:
+            run_on_ui_thread(lambda: self.update_loading_progress(100))
+            show_success("Download completed")
 
         run_on_ui_thread(lambda: self.dismiss_loading_alert())
 
@@ -2721,8 +2975,12 @@ class ReSwagaPlugin(BasePlugin):
 
         self.spinner = None
 
-    def show_info_alert(self, title: str, message: str, positive_text: Optional[str] = None,
-                        positive_listener: Optional[Callable] = None, neutral_text: Optional[str] = "Ok",
+    def show_info_alert(self,
+                        title: str,
+                        message: str,
+                        positive_text: Optional[str] = None,
+                        positive_listener: Optional[Callable] = None,
+                        neutral_text: Optional[str] = "Ok",
                         neutral_listener: Optional[Callable] = None):
         if title == "" or message == "":
             logcat("Title or message not found, can't show info alert.")
