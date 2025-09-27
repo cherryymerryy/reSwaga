@@ -72,30 +72,31 @@ from ui.alert import AlertDialogBuilder
 from ui.bulletin import BulletinHelper
 from ui.settings import Selector, Input, Divider, Header, Switch, Text
 
-from java.io import File # type: ignore
-from java.util import ArrayList, Locale # type: ignore
+from java.io import File  # type: ignore
+from java.util import ArrayList, Locale  # type: ignore
 
-from android.content import Intent # type: ignore
-from android.net import Uri # type: ignore
+from android.content import Intent  # type: ignore
+from android.net import Uri  # type: ignore
 
-from com.exteragram.messenger.plugins import PluginsController # type: ignore
-from com.exteragram.messenger.plugins.ui import PluginSettingsActivity # type: ignore
+from com.exteragram.messenger.plugins import PluginsController  # type: ignore
+from com.exteragram.messenger.plugins.ui import PluginSettingsActivity  # type: ignore
+from com.exteragram.messenger.utils import AppUtils # type: ignore
 
-from org.telegram.tgnet import TLRPC # type: ignore
-from org.telegram.tgnet.tl import TL_account # type: ignore
-from org.telegram.messenger import ApplicationLoader, R, AndroidUtilities, SendMessagesHelper, MessageObject, MediaController # type: ignore
+from org.telegram.tgnet import TLRPC  # type: ignore
+from org.telegram.tgnet.tl import TL_account  # type: ignore
+from org.telegram.messenger import ApplicationLoader, R, AndroidUtilities, SendMessagesHelper, MessageObject, MediaController  # type: ignore
 
 __id__ = "reswag"
 __name__ = "reSwaga"
-__description__ =   (
+__description__ = (
     "Плагин для отправки карточки/аудио файла текущего трека для музыкальных сервисов."
     "\n\n\t\t.now - Для отправки карточки,"
     "\n\t\t.nowt - Для отправки аудио файла."
 )
 __icon__ = "remusic/5"
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 __author__ = "@meeowPlugins"
-__min_version__ = "11.12.1"
+__min_version__ = "12.0.1"
 
 TEMP_DIR_NAME: str = 'swaga_temp'
 RESOURCE_DIR_NAME: str = "resources"
@@ -116,8 +117,11 @@ RESOURCES: List[str] = [
 DOWNLOAD_URL: str = "https://raw.githubusercontent.com/cherryymerryy/reSwaga/main/"
 
 EMPTY_TRACK_COVER: str = DOWNLOAD_URL + 'resources/img/empty_cover.png'
+EMPTY_TRACK_DOWNLOAD_URL: str = 'https://s99vlx.storage.yandex.net/get-mp3/7abc6dce620574e8ad33b16384c14f12/00063f440df4e290/rmusic/U2FsdGVkX1_i00M22wccYgV1p-LHnVjWSKoxZ-kp7vcNv14CmcqZphU4AFehK7x0xyHHWil7H5grulOPBNmR9stb16ntQRLdGAZzUuuQaOQ/bce05e2edec6b8a1a09c31fcbafefe9ccf7795962d43e4de4113b611a4bec9b3'
 
 PLATFORMS_COUNT: int = 6
+
+STREAM_TRACK_TEXT: str = f"{__name__} stream audio"
 
 DEFAULT_COBALT_API_URL: str = 'https://cobalt.255x.ru'
 DEFAULT_API_URL: str = "https://your.api.url"
@@ -264,7 +268,6 @@ class LocaleController:
         else:
             return self.LanguageEnglish()
 
-
     class LanguageRussian:
         language = "ru"
 
@@ -287,7 +290,7 @@ class LocaleController:
 
         Settings_CardType_Header = "Стиль карточки"
         Settings_CardType_1 = "Стандартная"
-        Settings_CardType_2 = "Вертикальная 🆕"
+        Settings_CardType_2 = "Вертикальная "
 
         Settings_BackgroundMode_Text = "Фон"
         Settings_BackgroundMode_Item_1 = "Обложка трека"
@@ -340,6 +343,7 @@ class LocaleController:
         Setting_TrackStream_Text = "Стримить в..."
         Setting_TrackStream_Item1 = "Био"
         Setting_TrackStream_Item2 = "Локацию (рекомендуется)"
+        Setting_TrackStream_Item3 = "🆕 Музыка в вашем профиле"
 
         Settings_InStream_Text = "Текст по умолчанию"
         Settings_InStream_Subtext = "Отображается, если плеер недоступен или ничего не воспроизводится"
@@ -368,10 +372,10 @@ class LocaleController:
         Settings_YandexMusic_CustomApi_Enable_Subtext = "Внимание! Включайте это только если вы знаете что делаете."
 
         Settings_YandexMusic_CustomApi_Input_Text = "Кастомное API"
-    
+
         Alert_HEX_Title = "⚠️ Ошибка HEX"
         Alert_HEX_Text = "Недопустимый HEX-код цвета"
-        
+
         Message_CaptionLink_Text = "[{0}]({1})"
         Message_CaptionSongLink_Text = "[song.link]({0})"
         Message_CaptionDivider = " • "
@@ -383,7 +387,7 @@ class LocaleController:
         Check_Platform_NotSelected_Button = "Выбрать"
 
         Check_Platform_DownloadNotAvailable = "Для текущего сервиса '.nowt' недоступна."
-        
+
         Check_Resources_NotFound = "Необходимые ресурсы не найдены."
         Check_Resources_NotFound_Button = "Скачать"
 
@@ -422,6 +426,9 @@ class LocaleController:
         MenuItem_Service_Success_Subtext = "Но вам нужно указать данные авторизации."
         MenuItem_Service_Fail = "Не удалось обновить сервис на {0}."
 
+        Guide_Spotify_Link = 'https://telegra.ph/reSwaga-Gajd-po-avtorizacii-v-Spotify-09-20'
+        Guide_Soundcloud_Link = 'https://telegra.ph/reSwaga-Gajd-po-avtorizacii-v-SoundCloud-09-21'
+
     class LanguageEnglish:
         language = "en"
 
@@ -444,7 +451,7 @@ class LocaleController:
 
         Settings_CardType_Header = "Card Style"
         Settings_CardType_1 = "Standard"
-        Settings_CardType_2 = "Vertical 🆕"
+        Settings_CardType_2 = "Vertical "
 
         Settings_BackgroundMode_Text = "Background"
         Settings_BackgroundMode_Item_1 = "Track Cover"
@@ -497,6 +504,7 @@ class LocaleController:
         Setting_TrackStream_Text = "Stream to..."
         Setting_TrackStream_Item1 = "Bio"
         Setting_TrackStream_Item2 = "Location (Recommended)"
+        Setting_TrackStream_Item3 = "🆕 Music on Your Profile"
 
         Settings_InStream_Text = "Default Text"
         Settings_InStream_Subtext = "Text displayed when the player is unavailable or no track is playing"
@@ -528,7 +536,7 @@ class LocaleController:
 
         Alert_HEX_Title = "⚠️ HEX Error"
         Alert_HEX_Text = "Invalid HEX color code"
-        
+
         Message_CaptionLink_Text = "[{0}]({1})"
         Message_CaptionSongLink_Text = "[song.link]({0})"
         Message_CaptionDivider = " • "
@@ -578,6 +586,9 @@ class LocaleController:
         MenuItem_Service_Success = "Selected {0} as main service."
         MenuItem_Service_Success_Subtext = "But you need set auth data."
         MenuItem_Service_Fail = "Failed to select {0} as main service."
+
+        Guide_Spotify_Link = 'https://telegra.ph/reSwaga-Authorization-guide-for-Spotify-09-21'
+        Guide_Soundcloud_Link = 'https://telegra.ph/reSwaga-Authorization-guide-for-SoundCloud-09-21'
 
 
 locale = LocaleController().get_controller()
@@ -659,6 +670,7 @@ class Spotify(BasePlatform):
         self.username = username
         self.headers = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
         self.now_track = Track(active=False)
+        self.pre_auth_settings = True
 
     def get_track(self) -> Optional[Track]:
         data = requests.get(f"https://api.stats.fm/api/v1/users/{self.username}/streams/current", headers=self.headers)
@@ -716,6 +728,18 @@ class Spotify(BasePlatform):
             else:
                 return None
 
+    def create_pre_auth_settings(self, plugin: BasePlugin) -> List[Any]:
+        return [
+            Divider(
+                text=locale.SoundCloud_Warning
+            ),
+            Text(
+                text=locale.Settings_YandexMusic_Auth_Guide,
+                icon="msg_info",
+                on_click=lambda _: open_link(locale.Guide_Spotify_Link)
+            )
+        ]
+
 
 class YandexMusic(BasePlatform):
     def __init__(self, value: str, api_url: Optional[str] = None):
@@ -727,8 +751,8 @@ class YandexMusic(BasePlatform):
         self.need_special_platform_args_check = True
         self.api_url: str = api_url if api_url else "https://track.mipoh.ru"
         self.headers = {
-            "User-Agent": "Mozilla/5.0", 
-            "Accept": "application/json", 
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json",
             "ya-token": self.token
         }
 
@@ -954,18 +978,17 @@ class SoundCloud(BasePlatform):
             Text(
                 text=locale.Settings_YandexMusic_Auth_Guide,
                 icon="msg_info",
-                on_click=lambda _: open_link("https://now.es3n1n.eu/sc/")
+                on_click=lambda _: open_link(locale.Guide_Soundcloud_Link)
             )
         ]
 
 
 # FROM 'VkNowPlay' PLUGIN
 class VkMusic(BasePlatform):
-    def __init__(self, value: str, vk_id: Optional[int] = None):
+    def __init__(self, value: str):
         super().__init__(value)
         self.value_text = locale.Settings_Auth_Value_YandexMusic_Text
         self.token: str = value.strip()
-        self.vk_id: Optional[int] = vk_id
         self.pre_auth_settings = True
         self.additional_settings = True
         self.can_download_track = False
@@ -973,32 +996,30 @@ class VkMusic(BasePlatform):
 
     def get_track(self) -> Optional[Track]:
         params: Dict[str, Any] = {
-            'user_ids': self.vk_id,
             'fields': 'status',
             'v': 5.199,
             'access_token': self.token
         }
 
         try:
-            response = requests.get('https://api.vk.com/method/users.get', params=params)
+            response = requests.get('https://api.vk.ru/method/users.get', params=params)
             data = response.json()
 
             if data.get('response', None) is None:
                 logcat('Response not found')
                 return Track(active=False)
-            
+
             response = data['response'][0]
 
             if response.get('status_audio', None) is None:
-                show_info(locale.VkMusic_Audio_NotFound)
                 logcat('Audio status not found')
                 return Track(active=False)
-            
+
             t = response.get('status_audio', None)
             if t is None:
                 logcat('Audio status not found2')
                 return Track(active=False)
-            
+
             main_artists: list = t.get('main_artists', None)
             if main_artists is None:
                 artists_names: List[str] = [t.get('artist', 'Artist w/out name')]
@@ -1007,11 +1028,11 @@ class VkMusic(BasePlatform):
                 artists_names: List[str] = [a.get('name', 'Artist w/out name') for a in artists]
 
             thumbnail = EMPTY_TRACK_COVER
-            link: str = f"https://vk.com/audio{t.get('owner_id', 0)}_{t.get('id', 0)}"
+            link: str = f"https://vk.ru/audio{t.get('owner_id', 0)}_{t.get('id', 0)}"
             album = t.get('album', None)
 
             if not album is None:
-                album_link: str = f"https://vk.com/music/album/{album.get('owner_id', 0)}_{album.get('id', 0)}_{album.get('access_key', None)}"
+                album_link: str = f"https://vk.ru/music/album/{album.get('owner_id', 0)}_{album.get('id', 0)}_{album.get('access_key', None)}"
                 thumb = album.get('thumb', None)
                 if not thumb is None:
                     thumbnail = thumb.get('photo_1200', None)
@@ -1030,47 +1051,19 @@ class VkMusic(BasePlatform):
 
             self.now_track = track
             return track
-        
+
         except Exception as e:
             import traceback
             logcat(f"Exception occurred while getting VK status: {e}\nFull traceback: {traceback.format_exc()}")
             self.now_track = Track(active=False)
             return Track(active=False)
 
-    def special_platform_args_check(self, plugin):
-        if plugin.get_setting('vk_music_id', None) in [0, None, ""]:
-            show_error(
-                message=locale.VkMusic_Id_NotValid,
-                on_click=lambda: open_plugin_settings(),
-                button_text=locale.Action_Fix
-            )
-            return True
-        
-        else:
-            return False
-
     def create_pre_auth_settings(self, plugin):
         return [
             Text(
                 text=locale.Settings_YandexMusic_Auth_Guide,
                 icon="msg_info",
-                on_click=lambda _: plugin.show_info_alert(
-                    title=locale.Settings_YandexMusic_Auth_Guide,
-                    message=locale.Settings_VkMusic_LoginGuide,
-                    positive_text="Ok",
-                    neutral_text="Guide",
-                    neutral_listener=lambda: open_link("https://vkhost.github.io/")
-                )
-            ),
-            Input(
-                key="vk_music_id",
-                text=locale.VkMusic_Id,
-                icon="msg_mention",
-                default="0",
-                on_change=lambda _: plugin.update_platform_object(
-                    plugin.get_setting("selected_platform", int(Platform.NotSelected.value[0])),
-                    True
-                )
+                on_click=lambda _: open_link('https://telegra.ph/reSwaga-Gajd-po-avtorizacii-v-VK-09-21')
             )
         ]
 
@@ -1111,7 +1104,7 @@ class TgMusic(BasePlatform):
                 album = results[0].get('collectionViewUrl', None)
                 link = results[0].get('trackViewUrl', None)
                 artwork_url = results[0].get('artworkUrl30', None)
-                thumbnail = str(artwork_url).replace('30x30bb','600x600bb') \
+                thumbnail = str(artwork_url).replace('30x30bb', '600x600bb') \
                     if not artwork_url is None \
                     else EMPTY_TRACK_COVER
 
@@ -1176,7 +1169,7 @@ def get_platform(platform: int) -> Platform:
         return Platform.TgMusic
     else:
         return Platform.NotSelected
-    
+
 
 def get_songlink(platform: int) -> str:
     if platform == int(Platform.NotSelected.value[0]):
@@ -1196,24 +1189,24 @@ def get_songlink(platform: int) -> str:
 
 
 def get_download_link(platform: int, track_id: int) -> Optional[str]:
-        songlink_codename = get_songlink(platform)
-        songlink = requests.get(f"https://song.link/{songlink_codename}/{track_id}")
-        if songlink.status_code == 200:
-            youtube_link = re.findall(r"(https://(www\.)?youtube.com/.+?=.+?\")", songlink.text)
-            soundcloud_link = re.findall(r"(https://(www\.)?soundcloud\.com/.+?\")", songlink.text)
-            if soundcloud_link or youtube_link:
-                return soundcloud_link[0][0][:-1] if soundcloud_link else youtube_link[0][0][:-1]
-            else:
-                return None
+    songlink_codename = get_songlink(platform)
+    songlink = requests.get(f"https://song.link/{songlink_codename}/{track_id}")
+    if songlink.status_code == 200:
+        youtube_link = re.findall(r"(https://(www\.)?youtube.com/.+?=.+?\")", songlink.text)
+        soundcloud_link = re.findall(r"(https://(www\.)?soundcloud\.com/.+?\")", songlink.text)
+        if soundcloud_link or youtube_link:
+            return soundcloud_link[0][0][:-1] if soundcloud_link else youtube_link[0][0][:-1]
         else:
             return None
+    else:
+        return None
 
 
 def copy(to_copy: str) -> bool:
     return AndroidUtilities.addToClipboard(to_copy)
 
 
-def delete_file_delayed(path: str, delay: int=60):
+def delete_file_delayed(path: str, delay: int = 60):
     def action():
         try:
             time.sleep(delay)
@@ -1402,6 +1395,116 @@ def get_local_stream_id() -> int:
     return value if isinstance(value, int) else 0
 
 
+def process(response, error):
+    if response:
+        logcat(f'{response}')
+    elif error:
+        logcat(f'{error.code} | {error.text}')
+
+
+def set_profile_saved_track(response):
+    update = response.updates.get(1)
+    if update is None:
+        logcat('update not valid')
+        return
+
+    message = update.message
+    if message is None:
+        logcat('msg not valid')
+        return
+
+    media = message.media
+    if media is None:
+        logcat('media not valid')
+        return
+
+    document = media.document
+    if document is None:
+        logcat('doc not valid')
+        return
+
+    file_id = document.id
+    access_hash = document.access_hash
+    file_reference = document.file_reference
+
+    if file_id is None:
+        logcat('update not valid')
+        return
+
+    if access_hash is None:
+        logcat('update not valid')
+        return
+
+    if file_reference is None:
+        logcat('update not valid')
+        return
+
+    if message.from_id.user_id is None or message.from_id.user_id != get_user_config().getClientUserId():
+        logcat('wrong id')
+        return
+
+    req = TLRPC.TL_account_saveMusic()
+
+    req.unsave = False
+    req.id = TLRPC.TL_inputDocument()
+    req.id.id = file_id
+    req.id.access_hash = access_hash
+    req.id.file_reference = file_reference
+
+    if req.id.file_reference is None:
+        logcat('file ref not valid')
+        req.id.file_reference = b''
+
+    send_request(req, process)
+
+
+def _to_syncsafe(size: int) -> bytes:
+    return bytes([
+        (size >> 21) & 0x7F,
+        (size >> 14) & 0x7F,
+        (size >> 7)  & 0x7F,
+        (size)       & 0x7F,
+    ])
+
+def _frame_bytes(frame_id: str, text: str) -> bytes:
+    try:
+        body_text = text.encode('latin-1')
+        encoding_byte = b'\x00'
+    except UnicodeEncodeError:
+        body_text = text.encode('utf-16')
+        encoding_byte = b'\x01'
+    body = encoding_byte + body_text
+    size_bytes = len(body).to_bytes(4, 'big')
+    header = frame_id.encode('ascii') + size_bytes + b'\x00\x00'
+    return header + body
+
+def create_minimal_id3_mp3(path: str, title: str, artist: str, duration_seconds: Optional[int] = None, add_small_frame: bool = False):
+    frames = bytearray()
+    frames += _frame_bytes('TIT2', title)
+    frames += _frame_bytes('TPE1', artist)
+
+    if duration_seconds is not None:
+        ms = str(int(duration_seconds * 1000))
+        frames += _frame_bytes('TLEN', ms)
+
+    tag_size = len(frames)
+    header = b'ID3' + bytes([3, 0]) + b'\x00' + _to_syncsafe(tag_size)
+
+    with open(path, 'wb') as f:
+        f.write(header)
+        f.write(frames)
+
+        if add_small_frame:
+            try:
+                fake_frame = bytes([0xFF, 0xFB, 0x90, 0x64]) + (b'\x00' * 418)
+                f.write(fake_frame)
+            except Exception:
+                pass
+
+    st = os.stat(path)
+    return path, st.st_size
+
+
 class ReSwagaPlugin(BasePlugin):
     def __init__(self):
         super().__init__()
@@ -1414,6 +1517,8 @@ class ReSwagaPlugin(BasePlugin):
         self.poller_lock: threading.Lock = threading.Lock()
 
     def on_plugin_load(self):
+        self.add_hook('TL_messages_sendMedia')
+
         try:
             self.add_on_send_message_hook()
             get_temp_dir()
@@ -1465,12 +1570,215 @@ class ReSwagaPlugin(BasePlugin):
         if self.poller_enabled:
             self.stop_poller()
 
+        self.remove_hook('TL_messages_sendMedia')
+
         logcat(f"Plugin unloaded.")
 
     def create_settings(self):
-        platforms = [p.value[1] for p in Platform]
         selected_platform = self.get_setting("selected_platform", 0)
         is_value_valid = self.is_platform_value_valid(selected_platform)
+        platform_obj = self.platform
+        advanced = self.get_setting('advanced_mode', False)
+        client_user_id = get_user_config().getClientUserId()
+
+        def auth_settings():
+            elements = [
+                Header(text=locale.Settings_Auth_Header),
+                Selector(
+                    key="selected_platform",
+                    text=locale.Settings_Auth_Platform,
+                    icon="msg_tone_on",
+                    items=[p.value[1] for p in Platform],
+                    default=0,
+                    on_change=lambda new_value: self.update_platform_object(new_value, False)
+                )
+            ]
+            if selected_platform == int(Platform.NotSelected.value[0]):
+                return elements
+
+            if selected_platform != int(Platform.TgMusic.value[0]):
+                elements.append(
+                    Input(
+                        key="value",
+                        text=locale.Settings_Auth_Value_Text if platform_obj.value_text is None else platform_obj.value_text,
+                        on_change=lambda _: self.update_platform_object(selected_platform, True),
+                        icon="msg_pin_code"
+                    )
+                )
+
+            if platform_obj.pre_auth_settings:
+                pre_auth = platform_obj.create_pre_auth_settings(self)
+                if pre_auth:
+                    elements += [
+                        Header(text=get_platform(selected_platform).value[1]),
+                        Divider(),
+                        *pre_auth
+                    ]
+
+            return elements
+
+        def additional_settings():
+            if not is_value_valid or selected_platform == int(Platform.TgMusic.value[0]):
+                return []
+            if platform_obj.additional_settings:
+                extra = platform_obj.create_additional_settings(self)
+                if extra:
+                    return [
+                        Divider(),
+                        Header(text=f"{get_platform(selected_platform).value[1]} - Additional settings"),
+                        *extra
+                    ]
+            return []
+
+        def cobalt_api_settings():
+            return [
+                Header(text='Cobalt API'),
+                Selector(
+                    key='cobalt_api_url',
+                    text=locale.Settings_CobaltApi_Text,
+                    default=1,
+                    items=COBALT_API_URLS,
+                    icon='msg_instant_link'
+                ),
+                Input(
+                    key='cobalt_api_url_custom',
+                    text=locale.Settings_CobaltApi_Custom_Text,
+                    subtext=locale.Settings_CobaltApi_Subtext,
+                    default=DEFAULT_COBALT_API_URL,
+                    icon='msg2_devices'
+                ) if self.get_setting('cobalt_api_url', 1) == 0 else None
+            ]
+
+        def card_settings():
+            return [
+                Header(text=locale.Settings_CardSettings_Header),
+                Selector(
+                    key='card_type',
+                    text=locale.Settings_CardType_Header,
+                    default=0,
+                    icon="msg_background",
+                    items=[locale.Settings_CardType_1, locale.Settings_CardType_2]
+                ),
+                Selector(
+                    key="background",
+                    text=locale.Settings_BackgroundMode_Text,
+                    default=1,
+                    items=[
+                        locale.Settings_BackgroundMode_Item_1,
+                        locale.Settings_BackgroundMode_Item_2
+                    ],
+                    icon="msg_photos"
+                ),
+                Selector(
+                    key="font",
+                    text=locale.Settings_Font_Text,
+                    default=0,
+                    items=[
+                        locale.Settings_Font_Item1,
+                        locale.Settings_Font_Item2,
+                        locale.Settings_Font_Item3,
+                        "Yandex Music",
+                        "Yandex Text",
+                    ],
+                    icon="msg_photo_text_regular"
+                ),
+                Selector(
+                    key="platform_link",
+                    text=locale.Settings_PlatformLink_Text,
+                    default=1,
+                    items=[
+                        locale.Settings_PlatformLink_Item_1,
+                        locale.Settings_PlatformLink_Item_2,
+                        locale.Settings_PlatformLink_Item_3
+                    ],
+                    icon="msg_link2"
+                ) if selected_platform != int(Platform.TgMusic.value[0]) else None,
+                Switch(
+                    key="songlink_link_include",
+                    text=locale.Settings_SongLinkInclude_Text,
+                    default=True,
+                    subtext=locale.Settings_SongLinkInclude_Subtext,
+                    icon="msg_language"
+                ),
+                Switch(
+                    key="fast_card_render",
+                    text=locale.Settings_FastCardRender_Text,
+                    default=False,
+                    subtext=locale.Settings_FastCardRender_Subtext,
+                    on_change=lambda v: self.set_fast_card_render_enabled(v),
+                    icon="boosts_solar"
+                ),
+                Switch(
+                    key="advanced_mode",
+                    text=locale.Setting_AdvancedMode_Text,
+                    default=False,
+                    subtext=locale.Setting_AdvancedMode_Subtext,
+                    icon="msg_palette"
+                ),
+                Text(
+                    text=locale.Setting_AdvancedMode_Title,
+                    icon="msg_download_settings",
+                    create_sub_fragment=self.create_customization_settings
+                ) if advanced else None,
+            ]
+
+        def stream_settings():
+            return [
+                Header(text=locale.Settings_Stream_Header),
+                Switch(
+                    key="stream_bio_enabled",
+                    text=locale.Settings_Stream_Text,
+                    default=False,
+                    subtext=locale.Settings_Stream_Subtext,
+                    on_change=lambda v: self.set_stream_bio_enabled(v),
+                    icon="msg_online"
+                ),
+                Text(
+                    text=locale.Settings_Stream_AccountId,
+                    on_click=lambda _: self.set_new_stream_account(),
+                    accent=True,
+                    icon="msg_mention"
+                ) if client_user_id != get_local_stream_id() else None,
+                Text(
+                    text=locale.Setting_Stream_Title,
+                    icon="msg_download_settings",
+                    create_sub_fragment=self.create_stream_settings
+                ),
+                Divider(text=locale.Settings_Stream_Alert),
+            ]
+
+        def cache_settings():
+            return [
+                Header(text=locale.Settings_Cache_Header),
+                Switch(
+                    key="enable_auth_data_cache",
+                    text=locale.Setting_Cache_Enable_Text,
+                    icon="menu_clear_cache",
+                    default=False,
+                    on_change=lambda v: self.update_cache(v)
+                ),
+                Text(
+                    text=locale.Setting_Cache_DeleteCached,
+                    icon="msg_delete",
+                    on_click=lambda _: self.clear_cached_platforms_values()
+                ) if self.get_setting("enable_auth_data_cache", False) else None
+            ]
+
+        def other_settings():
+            return [
+                Header(text=locale.Settings_Other_Header),
+                Text(
+                    text=locale.Setting_Other_SourceCheck,
+                    icon="msg_noise_on",
+                    on_click=lambda _: self.check_resources(True, True)
+                ),
+                Text(
+                    text=locale.Setting_Other_ForceDownload,
+                    icon="msg_download",
+                    on_click=lambda _: threading.Thread(target=self.download_resources, args=(True,),
+                                                        daemon=True).start()
+                )
+            ]
 
         settings = [
             Header(text=locale.Alert_Donate_Header),
@@ -1478,7 +1786,7 @@ class ReSwagaPlugin(BasePlugin):
                 text=locale.Setting_Other_Donate,
                 icon="msg_ton",
                 accent=True,
-                on_click=lambda view: self.show_info_alert(
+                on_click=lambda _: self.show_info_alert(
                     title=locale.Alert_Donate_Title,
                     message=locale.Alert_Donate_Text,
                     positive_text="OK",
@@ -1486,204 +1794,22 @@ class ReSwagaPlugin(BasePlugin):
                     neutral_listener=lambda: copy("UQBVxjueXqAEpALX_b0yr-ytXN26LOTpSBn26b9VRHKrmm5F")
                 )
             ),
+
             Divider(),
-            Header(text=locale.Settings_Auth_Header),
-            Selector(
-                key="selected_platform",
-                text=locale.Settings_Auth_Platform,
-                icon="msg_tone_on",
-                items=platforms,
-                default=0,
-                on_change=lambda new_value: self.update_platform_object(new_value, False)
-            )
+            *auth_settings(),
+            *additional_settings(),
+            Divider(),
+            *filter(None, cobalt_api_settings()),
+            Divider(),
+            *filter(None, card_settings()),
+            Divider(),
+            *filter(None, stream_settings()),
+            *filter(None, cache_settings()),
+            Divider(),
+            *other_settings()
         ]
 
-        if selected_platform == int(Platform.NotSelected.value[0]):
-            return settings
-
-        if selected_platform != int(Platform.TgMusic.value[0]):
-            settings += [
-                Input(
-                    key="value",
-                    text=locale.Settings_Auth_Value_Text if self.platform.value_text is None else self.platform.value_text,
-                    on_change=lambda _: self.update_platform_object(self.get_setting("selected_platform", 0), True),
-                    icon="msg_pin_code"
-                ) if selected_platform != int(Platform.NotSelected.value[0]) and selected_platform != int(Platform.TgMusic.value[0]) else None
-            ]
-
-        if self.platform.pre_auth_settings:
-            pre_auth_settings = self.platform.create_pre_auth_settings(self)
-            if len(pre_auth_settings) > 0:
-                settings += [
-                    Header(text=get_platform(selected_platform).value[1]),
-                    Divider()
-                ]
-                settings += pre_auth_settings
-
-        if not is_value_valid and selected_platform != int(Platform.TgMusic.value[0]):
-            return settings
-
-        advanced = self.get_setting('advanced_mode', False)
-
-        if self.platform.additional_settings:
-            additional_settings = self.platform.create_additional_settings(self)
-            if len(additional_settings) > 0:
-                settings += [
-                    Divider(),
-                    Header(
-                        text=f"{get_platform(selected_platform).value[1]} - Additional settings"
-                    )
-                ]
-                settings += additional_settings
-
-        settings += [
-            Divider(),
-
-            Header(text='Cobalt API'),
-            Selector(
-                key='cobalt_api_url',
-                text=locale.Settings_CobaltApi_Text,
-                default=1,
-                items=COBALT_API_URLS,
-                icon='msg_instant_link'
-            ),
-            Input(
-                key='cobalt_api_url_custom',
-                text=locale.Settings_CobaltApi_Custom_Text,
-                subtext=locale.Settings_CobaltApi_Subtext,
-                default=DEFAULT_COBALT_API_URL,
-                icon='msg2_devices'
-            ) if self.get_setting('cobalt_api_url', 1) == 0 else None,
-            Divider(),
-
-            Header(text=locale.Settings_CardSettings_Header),
-            Selector(
-                key='card_type',
-                text=locale.Settings_CardType_Header,
-                default=0,
-                icon="msg_background",
-                items=[
-                    locale.Settings_CardType_1,
-                    locale.Settings_CardType_2
-                ]
-            ),
-            Selector(
-                key="background",
-                text=locale.Settings_BackgroundMode_Text,
-                default=1,
-                items=[
-                    locale.Settings_BackgroundMode_Item_1,
-                    locale.Settings_BackgroundMode_Item_2
-                ],
-                icon="msg_photos"
-            ),
-            Selector(
-                key="font",
-                text=locale.Settings_Font_Text,
-                default=0,
-                items=[
-                    locale.Settings_Font_Item1,
-                    locale.Settings_Font_Item2,
-                    locale.Settings_Font_Item3,
-                    "Yandex Music",
-                    "Yandex Text",
-                ],
-                icon="msg_photo_text_regular"
-            ),
-            Selector(
-                key="platform_link",
-                text=locale.Settings_PlatformLink_Text,
-                default=1,
-                items=[
-                    locale.Settings_PlatformLink_Item_1,
-                    locale.Settings_PlatformLink_Item_2,
-                    locale.Settings_PlatformLink_Item_3
-                ],
-                icon="msg_link2"
-            ) if selected_platform != int(Platform.TgMusic.value[0]) else None,
-            Switch(
-                key="songlink_link_include",
-                text=locale.Settings_SongLinkInclude_Text,
-                default=True,
-                subtext=locale.Settings_SongLinkInclude_Subtext,
-                icon="msg_language"
-            ),
-            Switch(
-                key="fast_card_render",
-                text=locale.Settings_FastCardRender_Text,
-                default=False,
-                subtext=locale.Settings_FastCardRender_Subtext,
-                on_change=lambda new_value: self.set_fast_card_render_enabled(new_value),
-                icon="boosts_solar"
-            ),
-
-            Switch(
-                key="advanced_mode",
-                text=locale.Setting_AdvancedMode_Text,
-                default=False,
-                subtext=locale.Setting_AdvancedMode_Subtext,
-                icon="msg_palette"
-            ),
-            Text(
-                text=locale.Setting_AdvancedMode_Title,
-                icon="msg_download_settings",
-                create_sub_fragment=self.create_customization_settings
-            ) if advanced else None,
-
-            Divider(),
-
-            Header(text=locale.Settings_Stream_Header),
-            Switch(
-                key="stream_bio_enabled",
-                text=locale.Settings_Stream_Text,
-                default=False,
-                subtext=locale.Settings_Stream_Subtext,
-                on_change=lambda new_value: self.set_stream_bio_enabled(new_value),
-                icon="msg_online"
-            ),
-            Text(
-                text=locale.Settings_Stream_AccountId,
-                on_click=lambda _: self.set_new_stream_account(),
-                accent=True,
-                icon="msg_mention"
-            ) if get_user_config().getClientUserId() != get_local_stream_id() else None,
-            Text(
-                text=locale.Setting_Stream_Title,
-                icon="msg_download_settings",
-                create_sub_fragment=self.create_stream_settings
-            ),
-            Divider(text=locale.Settings_Stream_Alert),
-
-            Header(text=locale.Settings_Cache_Header),
-            Switch(
-                key="enable_auth_data_cache",
-                text=locale.Setting_Cache_Enable_Text,
-                icon="menu_clear_cache",
-                default=False,
-                on_change=lambda new_value: self.update_cache(new_value)
-            ),
-            Text(
-                text=locale.Setting_Cache_DeleteCached,
-                icon="msg_delete",
-                on_click=lambda _: self.clear_cached_platforms_values()
-            ) if self.get_setting("enable_auth_data_cache", False) else None,
-
-            Divider(),
-
-            Header(text=locale.Settings_Other_Header),
-            Text(
-                text=locale.Setting_Other_SourceCheck,
-                icon="msg_noise_on",
-                on_click=lambda _: self.check_resources(True, True)
-            ),
-            Text(
-                text=locale.Setting_Other_ForceDownload,
-                icon="msg_download",
-                on_click=lambda _: threading.Thread(target=self.download_resources, args=(True,), daemon=True).start()
-            )
-        ]
-
-        return settings
+        return list(filter(None, settings))
 
     def create_customization_settings(self):
         return [
@@ -1732,6 +1858,9 @@ class ReSwagaPlugin(BasePlugin):
         if get_user_config().isPremium():
             stream_places.append(locale.Setting_TrackStream_Item2)
 
+        stream_places.append(locale.Setting_TrackStream_Item3)
+        is_to_profile_stream = self.get_setting("stream_place", 0) == 2
+
         return [
             Selector(
                 key="stream_place",
@@ -1746,14 +1875,14 @@ class ReSwagaPlugin(BasePlugin):
                 default=DEFAULT_STREAM_TEXT,
                 subtext=locale.Settings_InStream_Subtext,
                 icon="msg_photo_text_framed3"
-            ),
+            ) if not is_to_profile_stream else None,
             Input(
                 key="track_display_format",
                 text=locale.Settings_FormatInStream_Text,
                 default=DEFAULT_STREAM_STRING,
                 subtext=locale.Settings_FormatInStream_Subtext,
                 icon="msg_view_file"
-            ),
+            ) if not is_to_profile_stream else None
         ]
 
     def set_menu_items(self, remove: bool):
@@ -1875,6 +2004,19 @@ class ReSwagaPlugin(BasePlugin):
                 self.stop_poller()
             elif event_type in [AppEvent.RESUME, AppEvent.START]:
                 self.start_poller()
+
+    def post_request_hook(self, request_name: str, account: int, response: Any, error: Any) -> HookResult:
+        if not self.get_setting('stream_bio_enabled', False):
+            logcat('Streamer disabled')
+            return HookResult(strategy=HookStrategy.DEFAULT)
+
+        if self.get_setting('stream_place', 0) != 2:
+            logcat('Stream place not valid')
+            return HookResult(strategy=HookStrategy.DEFAULT)
+
+        set_profile_saved_track(response)
+
+        return HookResult(strategy=HookStrategy.DEFAULT)
 
     def set_new_stream_account(self):
         save_stream_account_id(get_user_config().getClientUserId())
@@ -2118,8 +2260,9 @@ class ReSwagaPlugin(BasePlugin):
             import traceback
             logcat(f'send_card_message: {traceback.format_exc()}')
 
-    def send_audio_message(self, dialog_id, reply_to_msg, reply_to_top_msg):
-        run_on_ui_thread(lambda: self.show_spinner())
+    def send_audio_message(self, dialog_id, reply_to_msg, reply_to_top_msg, silent: bool = False) -> bool:
+        if not silent:
+            run_on_ui_thread(lambda: self.show_spinner())
 
         if self.poller_enabled:
             track = self.platform.now_track
@@ -2129,12 +2272,12 @@ class ReSwagaPlugin(BasePlugin):
         if not track.active:
             run_on_ui_thread(lambda: self.dismiss_spinner())
             show_error(locale.Track_Not_Active)
-            return
+            return False
 
         if not self.platform.can_download_track:
             run_on_ui_thread(lambda: self.dismiss_spinner())
             show_error(locale.Check_Platform_DownloadNotAvailable)
-            return
+            return False
 
         url = track.download_url
         temp_dir = get_temp_dir()
@@ -2162,7 +2305,6 @@ class ReSwagaPlugin(BasePlugin):
                 with open(file_path, 'rb') as fin, open(ext_path, 'wb') as fout:
                     fout.write(fin.read())
 
-                logcat(f'Saved in to {ext_path}')
                 delete_file_delayed(file_path)
             else:
                 new_url = get_download_link(
@@ -2172,17 +2314,16 @@ class ReSwagaPlugin(BasePlugin):
 
                 if new_url in ['', None]:
                     run_on_ui_thread(lambda: self.dismiss_spinner())
-                    return
+                    return False
 
                 file_path = self.download_track_with_cobalt(new_url, track)
                 if file_path in ['', None] or not os.path.exists(file_path):
                     run_on_ui_thread(lambda: self.dismiss_spinner())
-                    return
+                    return False
 
                 ext_root = ApplicationLoader.applicationContext.getExternalCacheDir()
                 plugin_dir = File(ext_root, TEMP_DIR_NAME)
                 ext_path = File(plugin_dir, File(file_path).getName()).getAbsolutePath()
-                logcat(file_path)
 
             account = get_account_instance()
 
@@ -2232,11 +2373,19 @@ class ReSwagaPlugin(BasePlugin):
                 None, None, None, True, 0, None, None, 0, False
             )
 
-            run_on_ui_thread(lambda: self.dismiss_spinner())
+            if not silent:
+                run_on_ui_thread(lambda: self.dismiss_spinner())
+
             delete_file_delayed(ext_path)
-        except Exception as _:
-            run_on_ui_thread(lambda: self.dismiss_spinner())
-            show_error(locale.Track_Not_Active)
+            return True
+        except Exception as e:
+            logcat(str(e))
+
+            if not silent:
+                run_on_ui_thread(lambda: self.dismiss_spinner())
+                show_error(locale.Track_Not_Active)
+
+            return False
 
     def update_platform_object(self, new_platform: int, value: bool):
         cache_enabled: bool = self.get_setting("enable_auth_data_cache", False)
@@ -2272,7 +2421,7 @@ class ReSwagaPlugin(BasePlugin):
             self.platform = SoundCloud(token)
 
         elif new_platform == int(Platform.VkMusic.value[0]):
-            self.platform = VkMusic(token, self.get_setting('vk_music_id', None))
+            self.platform = VkMusic(token)
 
         elif new_platform == int(Platform.TgMusic.value[0]):
             self.platform = TgMusic(token)
@@ -2401,6 +2550,10 @@ class ReSwagaPlugin(BasePlugin):
             if user_full.business_location and user_full.business_location.address:
                 current_text = user_full.business_location.address
 
+        elif stream_place == 2:
+            if not user_full.saved_music is None:
+                pass
+
         else:
             logcat("Index out of range. Can't get current bio text.")
 
@@ -2452,6 +2605,15 @@ class ReSwagaPlugin(BasePlugin):
             user_full.business_location = TLRPC.TL_businessLocation()
             user_full.business_location.address = final_text_to_set
 
+        elif stream_place == 2:  # in saved music
+            if self.platform.memory_id == self.platform.now_track.track_id:
+                return
+
+            self.platform.memory_id = self.platform.now_track.track_id
+            threading.Thread(target=self.download_track_for_stream, daemon=True).start()
+
+            request = None
+
         else:  # out of range
             logcat("Stream place index out of range.")
             return
@@ -2463,6 +2625,88 @@ class ReSwagaPlugin(BasePlugin):
                 logcat(f"Updating bio to \"{text_to_set}\"...")
             except Exception as e:
                 logcat(f"set_stream_text exception: {e}")
+
+    def download_track_for_stream(self):
+        client_user_id = get_user_config().getClientUserId()
+        if client_user_id is None or client_user_id == 0:
+            return
+
+        result = self.send_audio_message(
+            client_user_id,
+            None,
+            None,
+            True
+        )
+
+        if result:
+            return
+
+        logcat('Failed to download track, creating empty file...')
+
+        if self.poller_enabled:
+            track = self.platform.now_track
+        else:
+            track = self.platform.get_track()
+
+        temp_dir = get_temp_dir()
+
+        filename: str = "empty_audio.mp3"
+        file_path: str = File(temp_dir, filename).getAbsolutePath()
+
+        create_minimal_id3_mp3(file_path, track.title, ', '.join(track.artist), track.duration, True)
+
+        ext_root = ApplicationLoader.applicationContext.getExternalCacheDir()
+        plugin_dir = File(ext_root, TEMP_DIR_NAME)
+
+        if not plugin_dir.exists():
+            plugin_dir.mkdirs()
+
+        ext_path = File(plugin_dir, File(file_path).getName()).getAbsolutePath()
+
+        with open(file_path, 'rb') as fin:
+            with open(ext_path, 'wb') as fout:
+                fout.write(fin.read())
+
+        platform = self.get_setting("selected_platform", 0)
+
+        platform_link: int = self.get_setting("platform_link", 1)
+        platform_link_added: bool = False
+
+        songlink: bool = self.get_setting("songlink_link_include", True)
+        songlink_added: bool = False
+
+        caption: str = ""
+
+        if (platform_link and platform_link != 0) and platform != int(Platform.TgMusic.value[0]):
+            link = track.link if (platform_link == 1 or track is None) else track.album
+            caption += locale.Message_CaptionLink_Text.format(get_platform(platform).value[1], link)
+            platform_link_added = True
+
+        if songlink and songlink != 0:
+            if platform_link_added:
+                caption += locale.Message_CaptionDivider
+
+            caption += locale.Message_CaptionSongLink_Text.format(f"https://song.link/{get_songlink(platform)}/{track.track_id}")
+            songlink_added = True
+
+        if any([platform_link_added, songlink_added]):
+            emoji: str = random.choice(["[🎵](5188621441926438751) | ", "[🎶](5188705588925702510) | "])
+            caption = emoji + caption
+
+        markdown_need = any([platform_link_added, songlink_added])
+
+        SendMessagesHelper.prepareSendingDocument(
+            get_account_instance(),
+            ext_path,
+            ext_path,
+            None,
+            f"{caption} {__name__}_flag_metadata{f' {__name__}_flag_markdown' if markdown_need else ''}" ,
+            "audio/mpeg",
+            client_user_id,
+            None,
+            None,
+            None, None, None, True, 0, None, None, 0, False
+        )
 
     def poller(self):
         try:
@@ -2565,8 +2809,8 @@ class ReSwagaPlugin(BasePlugin):
                 not_active_font = ImageFont.truetype(bold_plugin_font, 80)
 
                 draw.text(
-                    xy = (width // 2, 45),
-                    text = __name__,
+                    xy=(width // 2, 45),
+                    text=__name__,
                     font=plugin_font,
                     fill=title_text_color,
                     align="center",
@@ -2574,8 +2818,8 @@ class ReSwagaPlugin(BasePlugin):
                 )
 
                 draw.text(
-                    xy = (width // 2, height // 2),
-                    text = "player_not_active_text",
+                    xy=(width // 2, height // 2),
+                    text="player_not_active_text",
                     font=not_active_font,
                     fill=title_text_color,
                     align="center",
@@ -2665,13 +2909,13 @@ class ReSwagaPlugin(BasePlugin):
 
                 progress_draw = ImageDraw.Draw(progress_bar_empty)
                 progress_draw.rounded_rectangle(
-                    xy = (0, 0, *progress_bar_empty.size),
-                    radius = 7,
+                    xy=(0, 0, *progress_bar_empty.size),
+                    radius=7,
                     fill=subtext_color
                 )
                 progress_draw.rounded_rectangle(
-                    xy = (0, 0, progress_bar_empty.width * (track.progress / track.duration), 10),
-                    radius = 7,
+                    xy=(0, 0, progress_bar_empty.width * (track.progress / track.duration), 10),
+                    radius=7,
                     fill=title_text_color
                 )
                 card.paste(progress_bar_empty, (590, 460), progress_bar_empty)
@@ -2680,16 +2924,16 @@ class ReSwagaPlugin(BasePlugin):
                 timers_font = ImageFont.truetype(timers_font_path, 30)
 
                 draw.text(
-                    xy = (590, 490),
-                    text = f"{datetime.datetime.fromtimestamp(track.progress).strftime('%M:%S')}",
-                    fill = subtext_color,
+                    xy=(590, 490),
+                    text=f"{datetime.datetime.fromtimestamp(track.progress).strftime('%M:%S')}",
+                    fill=subtext_color,
                     font=timers_font,
                     anchor="la"
                 )
                 draw.text(
-                    xy = (1365, 490),
-                    text = f"{datetime.datetime.fromtimestamp(track.duration).strftime('%M:%S')}",
-                    fill = subtext_color,
+                    xy=(1365, 490),
+                    text=f"{datetime.datetime.fromtimestamp(track.duration).strftime('%M:%S')}",
+                    fill=subtext_color,
                     font=timers_font,
                     anchor="ra"
                 )
@@ -2873,7 +3117,7 @@ class ReSwagaPlugin(BasePlugin):
             run_on_ui_thread(lambda: self.show_info_alert(title=locale.Alert_HEX_Title, message=locale.Alert_HEX_Text))
             self.set_setting(variable_name, DEFAULT_COLOR[variable_name])
 
-    def check_resources(self, redownload_resources: bool, show_success: bool) -> bool:
+    def check_resources(self, redownload_resources: bool, show_success_alert: bool) -> bool:
         try:
             temp = get_temp_dir()
             if not temp:
@@ -2890,7 +3134,7 @@ class ReSwagaPlugin(BasePlugin):
                     break
 
             if all_resources_exist:
-                if show_success:
+                if show_success_alert:
                     self.show_info_alert(title=locale.SourceSuccess_Title, message=locale.SourceSuccess_Text)
                 else:
                     logcat("All resources founded.")
