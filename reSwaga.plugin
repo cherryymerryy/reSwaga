@@ -1575,210 +1575,9 @@ class ReSwagaPlugin(BasePlugin):
         logcat(f"Plugin unloaded.")
 
     def create_settings(self):
+        platforms = [p.value[1] for p in Platform]
         selected_platform = self.get_setting("selected_platform", 0)
         is_value_valid = self.is_platform_value_valid(selected_platform)
-        platform_obj = self.platform
-        advanced = self.get_setting('advanced_mode', False)
-        client_user_id = get_user_config().getClientUserId()
-
-        def auth_settings():
-            elements = [
-                Header(text=locale.Settings_Auth_Header),
-                Selector(
-                    key="selected_platform",
-                    text=locale.Settings_Auth_Platform,
-                    icon="msg_tone_on",
-                    items=[p.value[1] for p in Platform],
-                    default=0,
-                    on_change=lambda new_value: self.update_platform_object(new_value, False)
-                )
-            ]
-            if selected_platform == int(Platform.NotSelected.value[0]):
-                return elements
-
-            if selected_platform != int(Platform.TgMusic.value[0]):
-                elements.append(
-                    Input(
-                        key="value",
-                        text=locale.Settings_Auth_Value_Text if platform_obj.value_text is None else platform_obj.value_text,
-                        on_change=lambda _: self.update_platform_object(selected_platform, True),
-                        icon="msg_pin_code"
-                    )
-                )
-
-            if platform_obj.pre_auth_settings:
-                pre_auth = platform_obj.create_pre_auth_settings(self)
-                if pre_auth:
-                    elements += [
-                        Header(text=get_platform(selected_platform).value[1]),
-                        Divider(),
-                        *pre_auth
-                    ]
-
-            return elements
-
-        def additional_settings():
-            if not is_value_valid or selected_platform == int(Platform.TgMusic.value[0]):
-                return []
-            if platform_obj.additional_settings:
-                extra = platform_obj.create_additional_settings(self)
-                if extra:
-                    return [
-                        Divider(),
-                        Header(text=f"{get_platform(selected_platform).value[1]} - Additional settings"),
-                        *extra
-                    ]
-            return []
-
-        def cobalt_api_settings():
-            return [
-                Header(text='Cobalt API'),
-                Selector(
-                    key='cobalt_api_url',
-                    text=locale.Settings_CobaltApi_Text,
-                    default=1,
-                    items=COBALT_API_URLS,
-                    icon='msg_instant_link'
-                ),
-                Input(
-                    key='cobalt_api_url_custom',
-                    text=locale.Settings_CobaltApi_Custom_Text,
-                    subtext=locale.Settings_CobaltApi_Subtext,
-                    default=DEFAULT_COBALT_API_URL,
-                    icon='msg2_devices'
-                ) if self.get_setting('cobalt_api_url', 1) == 0 else None
-            ]
-
-        def card_settings():
-            return [
-                Header(text=locale.Settings_CardSettings_Header),
-                Selector(
-                    key='card_type',
-                    text=locale.Settings_CardType_Header,
-                    default=0,
-                    icon="msg_background",
-                    items=[locale.Settings_CardType_1, locale.Settings_CardType_2]
-                ),
-                Selector(
-                    key="background",
-                    text=locale.Settings_BackgroundMode_Text,
-                    default=1,
-                    items=[
-                        locale.Settings_BackgroundMode_Item_1,
-                        locale.Settings_BackgroundMode_Item_2
-                    ],
-                    icon="msg_photos"
-                ),
-                Selector(
-                    key="font",
-                    text=locale.Settings_Font_Text,
-                    default=0,
-                    items=[
-                        locale.Settings_Font_Item1,
-                        locale.Settings_Font_Item2,
-                        locale.Settings_Font_Item3,
-                        "Yandex Music",
-                        "Yandex Text",
-                    ],
-                    icon="msg_photo_text_regular"
-                ),
-                Selector(
-                    key="platform_link",
-                    text=locale.Settings_PlatformLink_Text,
-                    default=1,
-                    items=[
-                        locale.Settings_PlatformLink_Item_1,
-                        locale.Settings_PlatformLink_Item_2,
-                        locale.Settings_PlatformLink_Item_3
-                    ],
-                    icon="msg_link2"
-                ) if selected_platform != int(Platform.TgMusic.value[0]) else None,
-                Switch(
-                    key="songlink_link_include",
-                    text=locale.Settings_SongLinkInclude_Text,
-                    default=True,
-                    subtext=locale.Settings_SongLinkInclude_Subtext,
-                    icon="msg_language"
-                ),
-                Switch(
-                    key="fast_card_render",
-                    text=locale.Settings_FastCardRender_Text,
-                    default=False,
-                    subtext=locale.Settings_FastCardRender_Subtext,
-                    on_change=lambda v: self.set_fast_card_render_enabled(v),
-                    icon="boosts_solar"
-                ),
-                Switch(
-                    key="advanced_mode",
-                    text=locale.Setting_AdvancedMode_Text,
-                    default=False,
-                    subtext=locale.Setting_AdvancedMode_Subtext,
-                    icon="msg_palette"
-                ),
-                Text(
-                    text=locale.Setting_AdvancedMode_Title,
-                    icon="msg_download_settings",
-                    create_sub_fragment=self.create_customization_settings
-                ) if advanced else None,
-            ]
-
-        def stream_settings():
-            return [
-                Header(text=locale.Settings_Stream_Header),
-                Switch(
-                    key="stream_bio_enabled",
-                    text=locale.Settings_Stream_Text,
-                    default=False,
-                    subtext=locale.Settings_Stream_Subtext,
-                    on_change=lambda v: self.set_stream_bio_enabled(v),
-                    icon="msg_online"
-                ),
-                Text(
-                    text=locale.Settings_Stream_AccountId,
-                    on_click=lambda _: self.set_new_stream_account(),
-                    accent=True,
-                    icon="msg_mention"
-                ) if client_user_id != get_local_stream_id() else None,
-                Text(
-                    text=locale.Setting_Stream_Title,
-                    icon="msg_download_settings",
-                    create_sub_fragment=self.create_stream_settings
-                ),
-                Divider(text=locale.Settings_Stream_Alert),
-            ]
-
-        def cache_settings():
-            return [
-                Header(text=locale.Settings_Cache_Header),
-                Switch(
-                    key="enable_auth_data_cache",
-                    text=locale.Setting_Cache_Enable_Text,
-                    icon="menu_clear_cache",
-                    default=False,
-                    on_change=lambda v: self.update_cache(v)
-                ),
-                Text(
-                    text=locale.Setting_Cache_DeleteCached,
-                    icon="msg_delete",
-                    on_click=lambda _: self.clear_cached_platforms_values()
-                ) if self.get_setting("enable_auth_data_cache", False) else None
-            ]
-
-        def other_settings():
-            return [
-                Header(text=locale.Settings_Other_Header),
-                Text(
-                    text=locale.Setting_Other_SourceCheck,
-                    icon="msg_noise_on",
-                    on_click=lambda _: self.check_resources(True, True)
-                ),
-                Text(
-                    text=locale.Setting_Other_ForceDownload,
-                    icon="msg_download",
-                    on_click=lambda _: threading.Thread(target=self.download_resources, args=(True,),
-                                                        daemon=True).start()
-                )
-            ]
 
         settings = [
             Header(text=locale.Alert_Donate_Header),
@@ -1786,7 +1585,7 @@ class ReSwagaPlugin(BasePlugin):
                 text=locale.Setting_Other_Donate,
                 icon="msg_ton",
                 accent=True,
-                on_click=lambda _: self.show_info_alert(
+                on_click=lambda view: self.show_info_alert(
                     title=locale.Alert_Donate_Title,
                     message=locale.Alert_Donate_Text,
                     positive_text="OK",
@@ -1794,22 +1593,205 @@ class ReSwagaPlugin(BasePlugin):
                     neutral_listener=lambda: copy("UQBVxjueXqAEpALX_b0yr-ytXN26LOTpSBn26b9VRHKrmm5F")
                 )
             ),
-
             Divider(),
-            *auth_settings(),
-            *additional_settings(),
-            Divider(),
-            *filter(None, cobalt_api_settings()),
-            Divider(),
-            *filter(None, card_settings()),
-            Divider(),
-            *filter(None, stream_settings()),
-            *filter(None, cache_settings()),
-            Divider(),
-            *other_settings()
+            Header(text=locale.Settings_Auth_Header),
+            Selector(
+                key="selected_platform",
+                text=locale.Settings_Auth_Platform,
+                icon="msg_tone_on",
+                items=platforms,
+                default=0,
+                on_change=lambda new_value: self.update_platform_object(new_value, False)
+            )
         ]
 
-        return list(filter(None, settings))
+        if selected_platform == int(Platform.NotSelected.value[0]):
+            return settings
+
+        if selected_platform != int(Platform.TgMusic.value[0]):
+            settings += [
+                Input(
+                    key="value",
+                    text=locale.Settings_Auth_Value_Text if self.platform.value_text is None else self.platform.value_text,
+                    on_change=lambda _: self.update_platform_object(self.get_setting("selected_platform", 0), True),
+                    icon="msg_pin_code"
+                ) if selected_platform != int(Platform.NotSelected.value[0]) and selected_platform != int(
+                    Platform.TgMusic.value[0]) else None
+            ]
+
+        if self.platform.pre_auth_settings:
+            pre_auth_settings = self.platform.create_pre_auth_settings(self)
+            if len(pre_auth_settings) > 0:
+                settings += [
+                    Header(text=get_platform(selected_platform).value[1]),
+                    Divider()
+                ]
+                settings += pre_auth_settings
+
+        if not is_value_valid and selected_platform != int(Platform.TgMusic.value[0]):
+            return settings
+
+        advanced = self.get_setting('advanced_mode', False)
+
+        if self.platform.additional_settings:
+            additional_settings = self.platform.create_additional_settings(self)
+            if len(additional_settings) > 0:
+                settings += [
+                    Divider(),
+                    Header(
+                        text=f"{get_platform(selected_platform).value[1]} - Additional settings"
+                    )
+                ]
+                settings += additional_settings
+
+        settings += [
+            Divider(),
+
+            Header(text='Cobalt API'),
+            Selector(
+                key='cobalt_api_url',
+                text=locale.Settings_CobaltApi_Text,
+                default=1,
+                items=COBALT_API_URLS,
+                icon='msg_instant_link'
+            ),
+            Input(
+                key='cobalt_api_url_custom',
+                text=locale.Settings_CobaltApi_Custom_Text,
+                subtext=locale.Settings_CobaltApi_Subtext,
+                default=DEFAULT_COBALT_API_URL,
+                icon='msg2_devices'
+            ) if self.get_setting('cobalt_api_url', 1) == 0 else None,
+            Divider(),
+
+            Header(text=locale.Settings_CardSettings_Header),
+            Selector(
+                key='card_type',
+                text=locale.Settings_CardType_Header,
+                default=0,
+                icon="msg_background",
+                items=[
+                    locale.Settings_CardType_1,
+                    locale.Settings_CardType_2
+                ]
+            ),
+            Selector(
+                key="background",
+                text=locale.Settings_BackgroundMode_Text,
+                default=1,
+                items=[
+                    locale.Settings_BackgroundMode_Item_1,
+                    locale.Settings_BackgroundMode_Item_2
+                ],
+                icon="msg_photos"
+            ),
+            Selector(
+                key="font",
+                text=locale.Settings_Font_Text,
+                default=0,
+                items=[
+                    locale.Settings_Font_Item1,
+                    locale.Settings_Font_Item2,
+                    locale.Settings_Font_Item3,
+                    "Yandex Music",
+                    "Yandex Text",
+                ],
+                icon="msg_photo_text_regular"
+            ),
+            Selector(
+                key="platform_link",
+                text=locale.Settings_PlatformLink_Text,
+                default=1,
+                items=[
+                    locale.Settings_PlatformLink_Item_1,
+                    locale.Settings_PlatformLink_Item_2,
+                    locale.Settings_PlatformLink_Item_3
+                ],
+                icon="msg_link2"
+            ) if selected_platform != int(Platform.TgMusic.value[0]) else None,
+            Switch(
+                key="songlink_link_include",
+                text=locale.Settings_SongLinkInclude_Text,
+                default=True,
+                subtext=locale.Settings_SongLinkInclude_Subtext,
+                icon="msg_language"
+            ),
+            Switch(
+                key="fast_card_render",
+                text=locale.Settings_FastCardRender_Text,
+                default=False,
+                subtext=locale.Settings_FastCardRender_Subtext,
+                on_change=lambda new_value: self.set_fast_card_render_enabled(new_value),
+                icon="boosts_solar"
+            ),
+
+            Switch(
+                key="advanced_mode",
+                text=locale.Setting_AdvancedMode_Text,
+                default=False,
+                subtext=locale.Setting_AdvancedMode_Subtext,
+                icon="msg_palette"
+            ),
+            Text(
+                text=locale.Setting_AdvancedMode_Title,
+                icon="msg_download_settings",
+                create_sub_fragment=self.create_customization_settings
+            ) if advanced else None,
+
+            Divider(),
+
+            Header(text=locale.Settings_Stream_Header),
+            Switch(
+                key="stream_bio_enabled",
+                text=locale.Settings_Stream_Text,
+                default=False,
+                subtext=locale.Settings_Stream_Subtext,
+                on_change=lambda new_value: self.set_stream_bio_enabled(new_value),
+                icon="msg_online"
+            ),
+            Text(
+                text=locale.Settings_Stream_AccountId,
+                on_click=lambda _: self.set_new_stream_account(),
+                accent=True,
+                icon="msg_mention"
+            ) if get_user_config().getClientUserId() != get_local_stream_id() else None,
+            Text(
+                text=locale.Setting_Stream_Title,
+                icon="msg_download_settings",
+                create_sub_fragment=self.create_stream_settings
+            ),
+            Divider(text=locale.Settings_Stream_Alert),
+
+            Header(text=locale.Settings_Cache_Header),
+            Switch(
+                key="enable_auth_data_cache",
+                text=locale.Setting_Cache_Enable_Text,
+                icon="menu_clear_cache",
+                default=False,
+                on_change=lambda new_value: self.update_cache(new_value)
+            ),
+            Text(
+                text=locale.Setting_Cache_DeleteCached,
+                icon="msg_delete",
+                on_click=lambda _: self.clear_cached_platforms_values()
+            ) if self.get_setting("enable_auth_data_cache", False) else None,
+
+            Divider(),
+
+            Header(text=locale.Settings_Other_Header),
+            Text(
+                text=locale.Setting_Other_SourceCheck,
+                icon="msg_noise_on",
+                on_click=lambda _: self.check_resources(True, True)
+            ),
+            Text(
+                text=locale.Setting_Other_ForceDownload,
+                icon="msg_download",
+                on_click=lambda _: threading.Thread(target=self.download_resources, args=(True,), daemon=True).start()
+            )
+        ]
+
+        return settings
 
     def create_customization_settings(self):
         return [
