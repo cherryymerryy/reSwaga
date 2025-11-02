@@ -2054,7 +2054,10 @@ class ReSwagaPlugin(BasePlugin):
             markdown_flag = f"{__name__}_flag_markdown"
 
             if metadata_flag in params.caption:
-                track = self.platform.get_track()
+                if self.poller_thread.is_alive():
+                    track = self.platform.now_track
+                else:
+                    track = self.platform.get_track()
 
                 logcat(f'founded track with title {track.title}')
 
