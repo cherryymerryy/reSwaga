@@ -1723,8 +1723,7 @@ class ReSwagaPlugin(BasePlugin):
             pre_auth_settings = self.platform.create_pre_auth_settings(self)
             if len(pre_auth_settings) > 0:
                 settings += [
-                    Header(text=get_platform(selected_platform).value[1]),
-                    Divider()
+                    Header(text=get_platform(selected_platform).value[1])
                 ]
                 settings += pre_auth_settings
 
@@ -2750,10 +2749,16 @@ class ReSwagaPlugin(BasePlugin):
         track = self.platform.now_track
         temp_dir = get_temp_dir()
 
-        filename: str = "empty_audio.mp3"
+        filename: str = f"{track.title} - {','.join(track.artist)}.mp3"
         file_path: str = File(temp_dir, filename).getAbsolutePath()
 
-        create_minimal_id3_mp3(file_path, track.title, ', '.join(track.artist), track.duration, True)
+        create_minimal_id3_mp3(
+            file_path,
+            track.title,
+            ', '.join(track.artist),
+            random.randint(30, 240) if track.duration is None else track.duration,
+            True
+        )
 
         ext_root = ApplicationLoader.applicationContext.getExternalCacheDir()
         plugin_dir = File(ext_root, TEMP_DIR_NAME)
