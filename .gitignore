@@ -181,3 +181,6 @@ cython_debug/
 .cursorindexingignore
 /.idea
 test.py
+*.elyx
+make_and_send.py
+test.py

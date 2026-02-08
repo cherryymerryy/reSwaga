@@ -1,0 +1,6 @@
+{
+  "metainfo": "assets/metainfo.json",
+  "main": "src/main.py",
+  "assets": "assets",
+  "strings": "strings"
+}

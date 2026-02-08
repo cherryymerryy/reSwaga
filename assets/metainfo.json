@@ -1,0 +1,9 @@
+{
+    "name": "reSwaga",
+    "id": "meeow_reswaga2",
+    "description": "Плагин для отправки карточки/аудио файла текущего трека для музыкальных сервисов.",
+    "icon": "remusic/5",
+    "min_version": "12.0.1",
+    "version": "2.0.0",
+    "author": "@meeowPlugins"
+}

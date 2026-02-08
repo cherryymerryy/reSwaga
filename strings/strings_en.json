@@ -1,0 +1,169 @@
+{
+    "Settings_Auth_Header": "Service & Authorization",
+    "Settings_Auth_Platform": "Service",
+    "Settings_Auth_Value_Text": "Value",
+    "Settings_Auth_Value_NotSelected_Text": "—",
+    "Settings_Auth_Value_Spotify_Text": "Username",
+    "Settings_Auth_Value_YandexMusic_Text": "Token",
+    "Settings_Auth_Value_SoundCloud_Text": "Token",
+
+    "Settings_YandexMusic_LoginGuide": "Go to token guide, log in to your Yandex account, and paste your token below.",
+    "Settings_VkMusic_LoginGuide": "Go to the website and learn how to get a token correctly. After studying, select 'vk.com' and log-in in to your VK account.",
+
+    "Settings_CobaltApi_Text": "Cobalt API Url",
+    "Settings_CobaltApi_Subtext": "Please do not change this value if you do not know what it is responsible for and why it is needed.",
+    "Settings_CobaltApi_Custom_Text": "Custom Cobalt API",
+
+    "Settings_CardSettings_Header": "Customization",
+
+    "Settings_CardType_Header": "Card Style",
+    "Settings_CardType_1": "Standard",
+    "Settings_CardType_2": "Vertical ",
+
+    "Settings_BackgroundMode_Text": "Background",
+    "Settings_BackgroundMode_Item_1": "Track Cover",
+    "Settings_BackgroundMode_Item_2": "Cover Color",
+
+    "Settings_Font_Text": "Font",
+    "Settings_Font_Item1": "Onest",
+    "Settings_Font_Item2": "Spotify",
+    "Settings_Font_Item3": "NotoSansJP",
+
+    "Settings_PlatformLink_Text": "Insert link to ...",
+    "Settings_PlatformLink_Item_1": "—",
+    "Settings_PlatformLink_Item_2": "Track",
+    "Settings_PlatformLink_Item_3": "Album",
+
+    "Settings_SongLinkInclude_Text": "Link to other platforms",
+    "Settings_SongLinkInclude_Subtext": "Adds a link to the song page on song.link",
+    "Settings_FastCardRender_Text": "Pre-render cards",
+    "Settings_FastCardRender_Subtext": "May increase battery consumption",
+
+    "Setting_AdvancedMode_Text": "Advanced Settings",
+    "Setting_AdvancedMode_Subtext": "Additional customization settings",
+    "Setting_AdvancedMode_Title": "Customization",
+
+    "Settings_BackgroundColor_Text": "Background Color",
+    "Settings_BackgroundColor_Subtext": "Background color if 'Cover Color' is selected in 'Background'",
+
+    "Settings_AccentColor_Text": "Accent Color",
+    "Settings_AccentColor_Subtext": "Text color used in track title and active progress bar",
+
+    "Settings_SecondaryColor_Text": "Secondary Color",
+    "Settings_SecondaryColor_Subtext": "Text color used for artist line, inactive progress bar, and timers",
+
+    "Settings_InstantCardSubtext_Text": "Secondary Text",
+    "Settings_InstantCardSubtext_Subtext": "Text displayed at the top of the bottom block of pre-rendered cards",
+
+    "Settings_InstantCardMainText_Text": "Main Text",
+    "Settings_InstantCardMainText_Subtext": "Text displayed at the bottom of the bottom block of pre-rendered cards",
+
+    "Settings_Vertical_ShowServiceLogo_Text": "Show service logo",
+
+    "Settings_Stream_Header": "Profile Streaming",
+    "Setting_Stream_Title": "Stream settings",
+    "Settings_Stream_Text": "Stream track to profile",
+    "Settings_Stream_Subtext": "Updates your bio/location with the currently playing track",
+    "Settings_Stream_Alert": "We recommend that you first set up the broadcast of the track, and only after that activate the function.",
+
+    "Settings_StreamAlert_Title": "⚠️⚠️WARNING⚠️⚠️",
+    "Settings_StreamAlert_Text": "This feature may work inconsistently due to Telegram's profile change limits. As a result, your profile information may not update immediately. Use at your own risk.",
+
+    "Setting_TrackStream_Text": "Stream to...",
+    "Setting_TrackStream_Item1": "Bio",
+    "Setting_TrackStream_Item2": "Location (Recommended)",
+    "Setting_TrackStream_Item3": "🆕 Music on Your Profile",
+
+    "Settings_InStream_Text": "Default Text",
+    "Settings_InStream_Subtext": "Text displayed when the player is unavailable or no track is playing",
+
+    "Settings_FormatInStream_Text": "Format",
+    "Settings_FormatInStream_Subtext": "Customize track display. {title} — track name, {artists} — artist(s)",
+
+    "Settings_Stream_AccountId": "Select this account for streaming",
+    "Settings_Stream_AccountId_Saved": "Selected account for streaming",
+    "Settings_Stream_AccountId_Failed_Save": "Failed to select account for streaming",
+
+    "Settings_Cache_Header": "Cache",
+    "Setting_Cache_Enable_Text": "Caching of authorization data",
+    "Setting_Cache_DeleteCached": "Delete cached authentication data",
+
+    "Settings_Other_Header": "Other",
+    "Setting_Other_SourceCheck": "File Integrity Check",
+    "Setting_Other_ForceDownload": "Download Full Resource Package",
+    "Setting_Other_Donate": "Support Development",
+
+    "Settings_YandexMusic_Auth_Guide": "Authentication Guide",
+    "Settings_YandexMusic_Auth_Guide_Text": "**guide**",
+
+    "Settings_YandexMusic_CustomApi_Enable_Text": "Enable Custom API",
+    "Settings_YandexMusic_CustomApi_Enable_Subtext": "Warning! Enable this only if you know what you doing.",
+    "Settings_YandexMusic_CustomApi_Input_Text": "Custom API Url",
+
+    "Alert_HEX_Title": "⚠️ HEX Error",
+    "Alert_HEX_Text": "Invalid HEX color code",
+
+    "Message_CaptionLink_Text": "[{0}]({1})",
+    "Message_CaptionSongLink_Text": "[song.link]({0})",
+    "Message_CaptionDivider": " • ",
+
+    "Check_Value_NotValid": "Platform value is not valid.",
+    "Check_Value_NotValid_Button": "Change",
+
+    "Check_Platform_NotSelected": "You can't use command without selected platform.",
+    "Check_Platform_NotSelected_Button": "Select",
+
+    "Check_Platform_DownloadNotAvailable": "For current service '.nowt' not available.",
+
+    "Check_Resources_NotFound": "Plugin resources not found.",
+    "Check_Resources_NotFound_Button": "Download",
+
+    "CachedAuthData_Clear_Success": "Cached authorization data removed.",
+    "CachedAuthData_Clear_Error": "Something went wrong, cached data not removed.",
+
+    "SourceSuccess_Title": "Success",
+    "SourceSuccess_Text": "No issues detected during resource check",
+
+    "Track_Not_Active": "Player not active.",
+
+    "VkMusic_Id": "VK account ID",
+    "VkMusic_Id_NotValid": "VK account ID not valid.",
+    "VkMusic_Audio_NotFound": "Track not found.",
+    "VkMusic_Warning": "❗❗❗Warning❗❗❗\nService VK Music working only if you enabled stream track in to profile in VK",
+
+    "SoundCloud_Warning": "❗❗❗Warning❗❗❗\nService SoundCloud working only with VPN service (if you in Russia)",
+
+    "Action_Fix": "Fix",
+
+    "Platform_YandexMusic": "Yandex.Music",
+    "Platform_VkMusic": "VK Music",
+
+    "Alert_Donate_Header": "Donate",
+    "Alert_Donate_Title": "Support Development",
+    "Alert_Donate_Text": "Below you can copy the TON address of the reSwaga developers and support the development with your donation.",
+    "Alert_Donate_Button": "Copy",
+
+    "Bulletin_InvalidCobaltResponse": "Invalid response from Cobalt API",
+    "Bulletin_NoItemsToDownload": "No items to download",
+    "Bulletin_CobaltErrorCode": "Cobalt Error Code — {0}",
+
+    "MenuItem_Service_Select_Text": "Select {0}",
+    "MenuItem_Service_Select_Subtext": "Service in reSwaga",
+    "MenuItem_Service_Success": "Selected {0} as main service.",
+    "MenuItem_Service_Success_Subtext": "But you need set auth data.",
+    "MenuItem_Service_Fail": "Failed to select {0} as main service.",
+
+    "Guide_Spotify_Link": "https://telegra.ph/reSwaga-Authorization-guide-for-Spotify-09-21",
+    "Guide_Soundcloud_Link": "https://telegra.ph/reSwaga-Authorization-guide-for-SoundCloud-09-21",
+
+    "Action_SendCard_Title": "Card",
+    "Action_SendCard_Subtext": "Sends a visual card with information about the track",
+    "Action_SendAudio_Title": "Audio",
+    "Action_SendAudio_Subtext": "Sends a track audio file",
+    "Action_SendText_Title": "Text",
+    "Action_SendText_Subtext": "Sends a message with information about the track",
+    "Action_Settings_Title": "Settings",
+    "Action_Settings_Subtext": "Page with all the LocaleController plugin settings",
+
+    "StreamPlaceUpdated": "Stream settings updated"
+}

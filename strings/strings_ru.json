@@ -1,0 +1,169 @@
+{
+    "Settings_Auth_Header": "Сервис и Авторизация",
+    "Settings_Auth_Platform": "Сервис",
+    "Settings_Auth_Value_Text": "Значение",
+    "Settings_Auth_Value_NotSelected_Text": "—",
+    "Settings_Auth_Value_Spotify_Text": "Юзернейм",
+    "Settings_Auth_Value_YandexMusic_Text": "Токен",
+    "Settings_Auth_Value_SoundCloud_Text": "Токен",
+
+    "Settings_YandexMusic_LoginGuide": "Перейдите к инструкции по получению токена, войдите в аккаунт Яндекса и вставьте токен ниже.",
+    "Settings_VkMusic_LoginGuide": "Перейдите на сайт и изучите как нужно правильно получить токен, после изучения выберите 'vk.com'",
+
+    "Settings_CobaltApi_Text": "Cobalt API",
+    "Settings_CobaltApi_Subtext": "Просим не менять это значение если не знаете за что оно отвечает и зачем оно нужно.",
+    "Settings_CobaltApi_Custom_Text": "Кастомный Cobalt API",
+
+    "Settings_CardSettings_Header": "Внешний вид",
+
+    "Settings_CardType_Header": "Стиль карточки",
+    "Settings_CardType_1": "Стандартная",
+    "Settings_CardType_2": "Вертикальная ",
+
+    "Settings_BackgroundMode_Text": "Фон",
+    "Settings_BackgroundMode_Item_1": "Обложка трека",
+    "Settings_BackgroundMode_Item_2": "Цвет обложки",
+
+    "Settings_Font_Text": "Шрифт",
+    "Settings_Font_Item1": "Onest",
+    "Settings_Font_Item2": "Spotify",
+    "Settings_Font_Item3": "NotoSansJP",
+
+    "Settings_PlatformLink_Text": "Вставьте ссылку на ...",
+    "Settings_PlatformLink_Item_1": "—",
+    "Settings_PlatformLink_Item_2": "Трек",
+    "Settings_PlatformLink_Item_3": "Альбом",
+
+    "Settings_SongLinkInclude_Text": "Ссылка на другие платформы",
+    "Settings_SongLinkInclude_Subtext": "Добавляет ссылку на страницу песни на song.link",
+    "Settings_FastCardRender_Text": "Предзагрузка карточек",
+    "Settings_FastCardRender_Subtext": "Может увеличить расход батареи",
+
+    "Setting_AdvancedMode_Text": "Расширенные настройки",
+    "Setting_AdvancedMode_Subtext": "Дополнительные параметры кастомизации",
+    "Setting_AdvancedMode_Title": "Настройка внешнего вида",
+
+    "Settings_BackgroundColor_Text": "Цвет фона",
+    "Settings_BackgroundColor_Subtext": "Цвет фона при выборе 'Цвет обложки' в параметре 'Фон'",
+
+    "Settings_AccentColor_Text": "Акцентный цвет",
+    "Settings_AccentColor_Subtext": "Цвет текста в названии трека и активном индикаторе прогресса",
+
+    "Settings_SecondaryColor_Text": "Вторичный цвет",
+    "Settings_SecondaryColor_Subtext": "Цвет текста для строки с артистом, неактивного прогресс-бара и таймеров",
+
+    "Settings_InstantCardSubtext_Text": "Вторичный текст",
+    "Settings_InstantCardSubtext_Subtext": "Текст в верхней части нижнего блока предзагруженных карточек",
+
+    "Settings_InstantCardMainText_Text": "Основной текст",
+    "Settings_InstantCardMainText_Subtext": "Текст в нижней части нижнего блока предзагруженных карточек",
+
+    "Settings_Vertical_ShowServiceLogo_Text": "Отображать логотип выбранного сервиса.",
+
+    "Settings_Stream_Header": "Поток в профиль",
+    "Setting_Stream_Title": "Настройки стрима",
+    "Settings_Stream_Text": "Стрим трека в профиль",
+    "Settings_Stream_Subtext": "Обновляет био/локацию текущим треком",
+    "Settings_Stream_Alert": "Рекомендуем вам сначала настроить трансляцию трека, а уже после этого активировать функцию.",
+
+    "Settings_StreamAlert_Title": "⚠️⚠️ВНИМАНИЕ⚠️⚠️",
+    "Settings_StreamAlert_Text": "Эта функция может работать нестабильно из-за ограничений Telegram на частую смену профиля. Ваши данные могут обновляться с задержкой. Используйте на свой страх и риск.",
+
+    "Setting_TrackStream_Text": "Стримить в...",
+    "Setting_TrackStream_Item1": "Био",
+    "Setting_TrackStream_Item2": "Локацию (рекомендуется)",
+    "Setting_TrackStream_Item3": "🆕 Музыка в вашем профиле",
+
+    "Settings_InStream_Text": "Текст по умолчанию",
+    "Settings_InStream_Subtext": "Отображается, если плеер недоступен или ничего не воспроизводится",
+
+    "Settings_FormatInStream_Text": "Формат",
+    "Settings_FormatInStream_Subtext": "Формат отображения трека. {title} — название трека, {artists} — артист(ы)",
+
+    "Settings_Stream_AccountId": "Выбрать текущий аккаунт для стриминга",
+    "Settings_Stream_AccountId_Saved": "Выбран аккаунт для стриминга",
+    "Settings_Stream_AccountId_Failed_Save": "Не удалось выбрать аккаунт для стриминга",
+
+    "Settings_Cache_Header": "Кэш",
+    "Setting_Cache_Enable_Text": "Кэширование данных авторизации",
+    "Setting_Cache_DeleteCached": "Очистить кэшированные данные авторизации",
+
+    "Settings_Other_Header": "Прочее",
+    "Setting_Other_SourceCheck": "Проверка целостности файлов",
+    "Setting_Other_ForceDownload": "Скачать все ресурсы заново",
+    "Setting_Other_Donate": "Поддержать разработку",
+
+    "Settings_YandexMusic_Auth_Guide": "Инструкция авторизации",
+    "Settings_YandexMusic_Auth_Guide_Text": "**инструкция**",
+
+    "Settings_YandexMusic_CustomApi_Enable_Text": "Включить кастомное API",
+    "Settings_YandexMusic_CustomApi_Enable_Subtext": "Внимание! Включайте это только если вы знаете что делаете.",
+    "Settings_YandexMusic_CustomApi_Input_Text": "Кастомное API",
+
+    "Alert_HEX_Title": "⚠️ Ошибка HEX",
+    "Alert_HEX_Text": "Недопустимый HEX-код цвета",
+
+    "Message_CaptionLink_Text": "[{0}]({1})",
+    "Message_CaptionSongLink_Text": "[song.link]({0})",
+    "Message_CaptionDivider": " • ",
+
+    "Check_Value_NotValid": "Указанное значение сервиса не валидно.",
+    "Check_Value_NotValid_Button": "Изменить",
+
+    "Check_Platform_NotSelected": "Вы не указали используемый вами сервис.",
+    "Check_Platform_NotSelected_Button": "Выбрать",
+
+    "Check_Platform_DownloadNotAvailable": "Для текущего сервиса '.nowt' недоступна.",
+
+    "Check_Resources_NotFound": "Необходимые ресурсы не найдены.",
+    "Check_Resources_NotFound_Button": "Скачать",
+
+    "CachedAuthData_Clear_Success": "Кэшированные данные авторизации удалены.",
+    "CachedAuthData_Clear_Error": "Произошла ошибка во время удаления кэшированных данных.",
+
+    "SourceSuccess_Title": "Успешно",
+    "SourceSuccess_Text": "Ошибок при проверке ресурсов не найдено",
+
+    "Track_Not_Active": "Плеер неактивен.",
+
+    "VkMusic_Id": "ID аккаунта VK",
+    "VkMusic_Id_NotValid": "ID аккаунта VK не валиден.",
+    "VkMusic_Audio_NotFound": "Трек не найден.",
+    "VkMusic_Warning": "❗❗❗Внимание❗❗❗\nСервис ВК Музыка будет работать только если у вас ВК включена трансляция трека в ваш профиль.",
+
+    "SoundCloud_Warning": "❗❗❗Внимание❗❗❗\nСервис SoundCloud будет работать только с включенным ВПН (если вы находитесь в России).",
+
+    "Action_Fix": "Исправить",
+
+    "Platform_YandexMusic": "Яндекс Музыка",
+    "Platform_VkMusic": "ВК Музыка",
+
+    "Alert_Donate_Header": "Донат",
+    "Alert_Donate_Title": "Поддержка разработки",
+    "Alert_Donate_Text": "Ниже вы можете скопировать TON-адрес разработчиков reSwaga и поддержать проект донатом.",
+    "Alert_Donate_Button": "Скопировать",
+
+    "Bulletin_InvalidCobaltResponse": "Некорректный ответ от Cobalt API",
+    "Bulletin_NoItemsToDownload": "Нет элементов для загрузки",
+    "Bulletin_CobaltErrorCode": "Ошибка Cobalt, код — {0}",
+
+    "MenuItem_Service_Select_Text": "Выбрать {0}",
+    "MenuItem_Service_Select_Subtext": "Сервис в reSwaga",
+    "MenuItem_Service_Success": "Сервис обновлен на {0}.",
+    "MenuItem_Service_Success_Subtext": "Но вам нужно указать данные авторизации.",
+    "MenuItem_Service_Fail": "Не удалось обновить сервис на {0}.",
+
+    "Guide_Spotify_Link": "https://telegra.ph/reSwaga-Gajd-po-avtorizacii-v-Spotify-09-20",
+    "Guide_Soundcloud_Link": "https://telegra.ph/reSwaga-Gajd-po-avtorizacii-v-SoundCloud-09-21",
+
+    "Action_SendCard_Title": "Карточка",
+    "Action_SendCard_Subtext": "Отправка визуальной карточки с информацией о треке",
+    "Action_SendAudio_Title": "Аудио",
+    "Action_SendAudio_Subtext": "Отправка аудио файла трека",
+    "Action_SendText_Title": "Текст",
+    "Action_SendText_Subtext": "Отправка сообщения с текстовой информацией о треке",
+    "Action_Settings_Title": "Настройки",
+    "Action_Settings_Subtext": "Страница со всеми настройками плагина LocaleController",
+
+    "StreamPlaceUpdated": "Настройки стрима обновлены"
+}
