@@ -679,15 +679,20 @@ class ReSwagaPlugin(BasePlugin):
             return not value in ["", None, DEFAULT_VALUE]
 
     def update_cache(self, new_value: bool):
-        initialize_cached_platforms_values()
-        if new_value:
-            self.set_menu_items(False)
-            save_platform_value(
-                self.get_setting("selected_platform", int(Platform.NotSelected.value[0])),
-                self.get_setting("value", "")
-            )
-        else:
-            self.set_menu_items(True)
+        try:
+            initialize_cached_platforms_values()
+            if new_value:
+                self.set_menu_items(False)
+                save_platform_value(
+                    self.get_setting("selected_platform", int(Platform.NotSelected.value[0])),
+                    self.get_setting("value", "")
+                )
+            else:
+                self.set_menu_items(True)
+                logcat('succ')
+        except Exception as e:
+            import traceback
+            logcat(traceback.format_exc())
 
     def clear_cached_platforms_values(self):
         initialize_cached_platforms_values()

@@ -5,24 +5,24 @@ from .utils import logcat, read, show_error, write, show_success, get_temp_dir
 
 
 def _get_cache_file_path() -> str | None:
-    temp_dir_obj = get_temp_dir()
-    if not temp_dir_obj:
-        logcat("Could not get base temp directory for cache.")
-        return None
-
-    swaga_dir_path = os.path.join(temp_dir_obj.getAbsolutePath(), TEMP_DIR_NAME)
-    return os.path.join(swaga_dir_path, "cached_values.json")
+    from elyx import assets # type: ignore
+    return os.path.join(assets.dir_path, "cached_values.json")
 
 
 def initialize_cached_platforms_values() -> list[str | None]:
-    empty_values = [DEFAULT_VALUE for _ in range(PLATFORMS_COUNT)]
-    path = _get_cache_file_path()
-    if path:
-        write(path, empty_values)
-        logcat("Cached values initialized in file.")
-    else:
-        logcat("Could not initialize cache file: path is invalid.")
-    return empty_values
+    try:
+        empty_values = [DEFAULT_VALUE for _ in range(PLATFORMS_COUNT)]
+        path = _get_cache_file_path()
+        if path:
+            write(_get_cache_file_path(), empty_values)
+            logcat("Cached values initialized in file.")
+        else:
+            logcat("Could not initialize cache file: path is invalid.")
+        return empty_values
+    except Exception as e:
+        import traceback
+        logcat(traceback.format_exc())
+        return []
 
 
 def is_cached_values_exist() -> bool:
