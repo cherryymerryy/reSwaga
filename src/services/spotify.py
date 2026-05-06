@@ -26,6 +26,8 @@ class Spotify(BasePlatform):
 
     def get_track(self) -> Track | None:
         data = requests.get(f"https://api.stats.fm/api/v1/users/{self.username}/streams/current", headers=self.headers)
+        if data.status_code == 409:
+            return None
 
         if data.status_code == 204 or data.status_code != 200:
             self.now_track = Track(active=False)

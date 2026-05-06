@@ -36,7 +36,7 @@ class LastFm(BasePlatform):
                 artist = track.get('artist', {}).get('#text', '') if isinstance(track.get('artist'), dict) else str(track.get('artist', ''))
                 album = track.get('album', {}).get('#text', '') if isinstance(track.get('album'), dict) else str(track.get('album', ''))
                 images = track.get('image', [])
-                image_url = elyx.assets.empty_cover
+                image_url = elyx.assets.empty_cover.path_str
                 if images:
                     size_priority = ['mega', 'extralarge', 'large']
                     size_map = {img.get('size'): img.get('#text', '') for img in images if img.get('#text')}

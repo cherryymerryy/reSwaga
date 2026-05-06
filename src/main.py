@@ -519,13 +519,17 @@ class ReSwagaPlugin(BasePlugin):
         has_caption = hasattr(params, 'caption') and isinstance(params.caption, str)
         has_text = hasattr(params, 'message') and isinstance(params.message, str)
 
+        from elyx import metainfo  # type: ignore
+
+        name = metainfo['name']
+
         if has_caption or has_text:
             is_modified = False
             current_text = params.caption if has_caption else params.message
 
             try:
-                metadata_flag = f"{__name__}_flag_metadata"
-                markdown_flag = f"{__name__}_flag_markdown"
+                metadata_flag = f"{name}_flag_metadata"
+                markdown_flag = f"{name}_flag_markdown"
 
                 if metadata_flag in current_text:
 
@@ -539,7 +543,7 @@ class ReSwagaPlugin(BasePlugin):
                         for i in range(attributes.size()):
                             attr = attributes.get(i)
                             if isinstance(attr, TLRPC.TL_documentAttributeAudio):
-                                attr.title = track.title if track.active else f"[{__name__}] ERROR"
+                                attr.title = track.title if track.active else f"[{name}] ERROR"
                                 attr.performer = ", ".join(track.artist) if track.active else strings.Track_Not_Active
                                 attr.duration = track.duration if track.active else 0
 
@@ -773,8 +777,12 @@ class ReSwagaPlugin(BasePlugin):
 
             temp_dir = get_temp_dir()
 
+            from elyx import metainfo  # type: ignore
+
+            name = metainfo['name']
+
             file_extension = original_filename.split('.')[-1] if original_filename and '.' in original_filename else 'mp3'
-            filename: str = f"{track.title} (via {__name__}).{file_extension}"
+            filename: str = f"{track.title} (via {name}).{file_extension}"
             file_path: str = File(temp_dir, filename).getAbsolutePath()
 
             logcat(f"Downloading audio in background thread: {filename}")
@@ -812,6 +820,9 @@ class ReSwagaPlugin(BasePlugin):
                 "peer": param.peer
             }
 
+            from elyx import metainfo  # type: ignore
+            name = metainfo['name']
+
             if self.is_poller_enabled():
                 track = self.platform.now_track
             else:
@@ -843,7 +854,7 @@ class ReSwagaPlugin(BasePlugin):
 
             answer = card if not (self.get_setting("fast_card_render", False)) else True
             if answer:
-                temp_file_path = File(temp_dir, f"now_{__name__}.png").getAbsolutePath()
+                temp_file_path = File(temp_dir, f"now_{name}.png").getAbsolutePath()
 
             if temp_file_path in ["", None]:
                 run_on_ui_thread(lambda: self.dismiss_spinner())
@@ -1016,12 +1027,15 @@ class ReSwagaPlugin(BasePlugin):
 
             markdown_need = any([platform_link_added, songlink_added])
 
+            from elyx import metainfo  # type: ignore
+            name = metainfo['name']
+
             SendMessagesHelper.prepareSendingDocument(
                 account,
                 ext_path,
                 ext_path,
                 None,
-                f"{caption} {__name__}_flag_metadata{f' {__name__}_flag_markdown' if markdown_need else ''}",
+                f"{caption} {name}_flag_metadata{f' {name}_flag_markdown' if markdown_need else ''}",
                 mime,
                 param.peer,
                 param.replyToMsg,
@@ -1083,9 +1097,12 @@ class ReSwagaPlugin(BasePlugin):
             emoji: str = random.choice(["[🎵](5188621441926438751) | ", "[🎶](5188705588925702510) | "])
             text = emoji + track_info + text
 
+        from elyx import metainfo  # type: ignore
+        name = metainfo['name']
+
         markdown_need = any([platform_link_added, songlink_added])
         params = {
-            "message": f"{text} {__name__}_flag_metadata{f' {__name__}_flag_markdown' if markdown_need else ''}",
+            "message": f"{text} {name}_flag_metadata{f' {name}_flag_markdown' if markdown_need else ''}",
             "peer": param.peer,
             "replyToMsg": param.replyToMsg,
             "replyToTopMsg": param.replyToTopMsg,
@@ -1408,12 +1425,15 @@ class ReSwagaPlugin(BasePlugin):
 
         markdown_need = any([platform_link_added, songlink_added])
 
+        from elyx import metainfo  # type: ignore
+        name = metainfo['name']
+
         SendMessagesHelper.prepareSendingDocument(
             get_account_instance(),
             ext_path,
             ext_path,
             None,
-            f"{caption} {__name__}_flag_metadata{f' {__name__}_flag_markdown' if markdown_need else ''}" ,
+            f"{caption} {name}_flag_metadata{f' {name}_flag_markdown' if markdown_need else ''}" ,
             "audio/mpeg",
             client_user_id,
             None,
@@ -1423,6 +1443,10 @@ class ReSwagaPlugin(BasePlugin):
 
     def create_horizontal_card(self):
         try:
+            from elyx import metainfo  # type: ignore
+
+            name = metainfo['name']
+
             track = self.platform.now_track
             temp_dir = get_temp_dir()
             font_family: int = self.get_setting("font", 0)
@@ -1451,7 +1475,7 @@ class ReSwagaPlugin(BasePlugin):
 
                 draw.text(
                     xy=(width // 2, 45),
-                    text=__name__,
+                    text=name,
                     font=plugin_font,
                     fill=title_text_color,
                     align="center",
@@ -1467,7 +1491,7 @@ class ReSwagaPlugin(BasePlugin):
                     anchor="mm"
                 )
 
-                filename = f"now_{__name__}.png"
+                filename = f"now_{name}.png"
                 temp_photo_path = File(temp_dir, filename).getAbsolutePath()
                 card.save(temp_photo_path)
                 return temp_photo_path
@@ -1475,24 +1499,11 @@ class ReSwagaPlugin(BasePlugin):
             background_setting = self.get_setting("background", 1)
 
             try:
-                logcat(track.thumb)
-                if track.thumb != '' and track.thumb is not None:
-                    resp = requests.get(track.thumb, timeout=5)
-                    resp.raise_for_status()
-                    thumb = BytesIO(resp.content)
-                    thumb.seek(0)
+                thumb = requests.get(track.thumb, stream=True).raw
+            except Exception as e:
+                thumb = assets.img.empty_cover.path_str
 
-                else:
-                    logcat('failed to get thumb')
-                    with open(assets.img.empty_cover.path_str, 'rb') as f:
-                        thumb = BytesIO(f.read())
-            except:
-                logcat('failed to get thumb')
-                with open(assets.img.empty_cover.path_str, 'rb') as f:
-                    thumb = BytesIO(f.read())
-
-            logcat(thumb)
-            background = Image.open(thumb)
+            background = Image.open(thumb).convert("RGBA")
             thumbnail = background.copy()
 
             if background_setting == 0:
@@ -1586,14 +1597,12 @@ class ReSwagaPlugin(BasePlugin):
                     anchor="ra"
                 )
             else:
-                local_font_family = None
-
                 if advanced_mode:
                     subtext = self.get_setting("instant_subtext", "powered by")
-                    maintext = self.get_setting("instant_main_text", __name__)
+                    maintext = self.get_setting("instant_main_text", name)
                 else:
                     subtext = "powered by"
-                    maintext = __name__
+                    maintext = name
 
                 subtext = subtext[:26] + "..." if len(subtext) > 26 else subtext
                 maintext = maintext[:21] + "..." if len(maintext) > 21 else maintext
@@ -1614,7 +1623,7 @@ class ReSwagaPlugin(BasePlugin):
                 draw.text((590, 415), subtext, subtext_color, font=info_font, anchor="ls")
                 draw.text((590, 485), maintext, title_text_color, font=device_font, anchor="ls")
 
-            filename = f"now_{__name__}.png"
+            filename = f"now_{name}.png"
             temp_photo_path = File(temp_dir, filename).getAbsolutePath()
             card.save(temp_photo_path)
 
@@ -1625,6 +1634,9 @@ class ReSwagaPlugin(BasePlugin):
             return None
 
     def create_vertical_card(self):
+        from elyx import metainfo  # type: ignore
+        name = metainfo['name']
+
         track = self.platform.now_track
         temp_dir = get_temp_dir()
         font_family: int = self.get_setting("font", 0)
@@ -1655,23 +1667,12 @@ class ReSwagaPlugin(BasePlugin):
         artists = ", ".join(track.artist)
 
         try:
-            logcat(track.thumb)
-            if track.thumb != '' and track.thumb is not None:
-                resp = requests.get(track.thumb, timeout=5)
-                resp.raise_for_status()
-                cover = BytesIO(resp.content)
-                cover.seek(0)
-
-            else:
-                logcat('failed to get thumb')
-                with open(assets.img.empty_cover.path_str, 'rb') as f:
-                    cover = BytesIO(f.read())
+            from elyxcore import Asset
+            thumb = Asset.temp_asset(track.thumb, "tempswaga.png")
         except:
-            logcat('failed to get thumb')
-            with open(assets.img.empty_cover.path_str, 'rb') as f:
-                cover = BytesIO(f.read())
+            thumb = assets.img.empty_cover
 
-        original_cover_img = Image.open(cover)
+        original_cover_img = Image.open(thumb.path_str).convert('RGBA')
         center_img = original_cover_img.copy().resize((384, 384), Image.Resampling.LANCZOS)
         background_fill = get_cover_accent_color(center_img)
         second_fill = adjust_color_for_readability(background_fill)
@@ -1756,7 +1757,7 @@ class ReSwagaPlugin(BasePlugin):
             logo = Image.open(platform_logo_path).convert("RGBA")
             card.paste(logo, (490, 555), logo)
 
-        filename = f"now_{__name__}.png"
+        filename = f"now_{name}.png"
         temp_photo_path = File(temp_dir, filename).getAbsolutePath()
         card.save(temp_photo_path)
 
